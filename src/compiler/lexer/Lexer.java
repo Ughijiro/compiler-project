@@ -120,8 +120,17 @@ public class Lexer{
                 }
                 return new Token(TokenType.MULTIPLY, "*", tokenLine);
             }
-            case '/':{
-                idx++;
+            case '/': {
+                //single-line comment
+                if (peek() == '/') {
+                    idx++; // skip second /
+
+                    while (!isAtEnd() && currentChar() != '\n') {
+                        idx++;
+                    }
+
+                    return getNextToken(); // skip comment and continue
+                }
                 return new Token(TokenType.DIVIDE, "/", tokenLine);
             }
             case '%':{
@@ -237,77 +246,112 @@ public class Lexer{
         }
         //NUMBER
         else if (Character.isDigit(c)) {
-    StringBuilder number = new StringBuilder();
+        StringBuilder number = new StringBuilder();
 
-    // --- case: starts with 0 ---
-    if (c == '0') {
-        number.append(c);
-        idx++;
-
-        if (!isAtEnd()) {
-            char next = currentChar();
-
-            // 🔵 Binary: 0b101
-            if (next == 'b' || next == 'B') {
-                number.append(next);
-                idx++;
-
-                while (!isAtEnd() && (currentChar() == '0' || currentChar() == '1')) {
-                    number.append(currentChar());
-                    idx++;
-                }
-
-                return new Token(TokenType.BASE2_NUMBER, number.toString(), tokenLine);
-            }
-
-            // 🟣 Hex: 0x1A
-            if (next == 'x' || next == 'X') {
-                number.append(next);
-                idx++;
-
-                while (!isAtEnd() && isHexDigit(currentChar())) {
-                    number.append(currentChar());
-                    idx++;
-                }
-
-                return new Token(TokenType.BASE16_NUMBER, number.toString(), tokenLine);
-            }
-
-            // 🟡 Octal: 077
-            if (next >= '0' && next <= '7') {
-                while (!isAtEnd() && currentChar() >= '0' && currentChar() <= '7') {
-                    number.append(currentChar());
-                    idx++;
-                }
-
-                return new Token(TokenType.BASE8_NUMBER, number.toString(), tokenLine);
-            }
-        }
-
-        return new Token(TokenType.BASE10_NUMBER, number.toString(), tokenLine);
-        }
-
-        // --- decimal / real ---
-        while (!isAtEnd() && Character.isDigit(currentChar())) {
-            number.append(currentChar());
-            idx++;
-        }
-
-        // 🔥 check for float (3.14)
-        if (!isAtEnd() && currentChar() == '.') {
-            number.append('.');
+        //starts with 0
+        if (c == '0') {
+            number.append(c);
             idx++;
 
+            if (!isAtEnd()) {
+                char next = currentChar();
+                //binary
+                if (next == 'b' || next == 'B') {
+                    number.append(next);
+                    idx++;
+
+                    while (!isAtEnd() && (currentChar() == '0' || currentChar() == '1')) {
+                        number.append(currentChar());
+                        idx++;
+                    }
+
+                    return new Token(TokenType.BASE2_NUMBER, number.toString(), tokenLine);
+                }
+
+                //hexa
+                if (next == 'x' || next == 'X') {
+                    number.append(next);
+                    idx++;
+
+                    while (!isAtEnd() && isHexDigit(currentChar())) {
+                        number.append(currentChar());
+                        idx++;
+                    }
+
+                    return new Token(TokenType.BASE16_NUMBER, number.toString(), tokenLine);
+                }
+
+                //octal
+                if (next >= '0' && next <= '7') {
+                    while (!isAtEnd() && currentChar() >= '0' && currentChar() <= '7') {
+                        number.append(currentChar());
+                        idx++;
+                    }
+
+                    return new Token(TokenType.BASE8_NUMBER, number.toString(), tokenLine);
+                }
+            }
+
+            return new Token(TokenType.BASE10_NUMBER, number.toString(), tokenLine);
+            }
+
+            //decimal and real
             while (!isAtEnd() && Character.isDigit(currentChar())) {
                 number.append(currentChar());
                 idx++;
             }
 
-            return new Token(TokenType.REAL_NUMBER, number.toString(), tokenLine);
-        }
+            // float
+            if (!isAtEnd() && currentChar() == '.') {
+                number.append('.');
+                idx++;
 
-        return new Token(TokenType.BASE10_NUMBER, number.toString(), tokenLine);
-    }
+                while (!isAtEnd() && Character.isDigit(currentChar())) {
+                    number.append(currentChar());
+                    idx++;
+                }
+
+                return new Token(TokenType.REAL_NUMBER, number.toString(), tokenLine);
+            }
+
+            return new Token(TokenType.BASE10_NUMBER, number.toString(), tokenLine);
+        }
+        else if (c == '"') {
+            StringBuilder str = new StringBuilder();
+            idx++; 
+
+            while (!isAtEnd() && currentChar() != '"') {
+                if (currentChar() == '\n') {
+                    line++;
+                }
+                str.append(currentChar());
+                idx++;
+            }
+
+            if (!isAtEnd()) {
+                idx++;
+                return new Token(TokenType.STRING, str.toString(), tokenLine);
+            } else {
+                return new Token(TokenType.INVALID, str.toString(), tokenLine);
+            }
+        }
+        else if (c == '\'') {
+            idx++;
+
+            if (isAtEnd()) {
+                return new Token(TokenType.INVALID, "", tokenLine);
+            }
+
+            char value = currentChar();
+            idx++;
+
+            if (!isAtEnd() && currentChar() == '\'') {
+                idx++;
+                return new Token(TokenType.CHAR, String.valueOf(value), tokenLine);
+            } else {
+                return new Token(TokenType.INVALID, String.valueOf(value), tokenLine);
+            }
+        }
         //operator & more
         return checkIfOperator(c, tokenLine);
     }
