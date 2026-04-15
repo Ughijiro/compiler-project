@@ -12,6 +12,8 @@ public enum TokenType {
     CASE,
     INT,
     DOUBLE,
+    FLOAT,
+    BOOLEAN,
     VOID,
     RETURN,
     WHILE,
@@ -22,7 +24,7 @@ public enum TokenType {
     BASE16_NUMBER,
     BASE8_NUMBER,
     BASE2_NUMBER,
-    FLOAT,
+    BOOL_VAL,
     STRING,
     CHAR,
 

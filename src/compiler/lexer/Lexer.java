@@ -1,21 +1,45 @@
 package compiler.lexer;
 
 public class Lexer{
-    private String input;
-    private int line = 1;
-    private int currentIdx = 0;
+    public static void main(String args[]){
+        String input = "int x = 10;";
+        int idx = 0;
 
-    public Lexer(String input){
-        this.input = input;
-    }
+        while(idx < input.length()){
+            char c = input.charAt(idx);
 
-    private void forward(){
-        if (currentIdx < input.length()) {
-            if (input.charAt(currentIdx) == '\n') {
-                line++;
+            if(Character.isDigit(c)){
+                StringBuilder number = new StringBuilder();
+
+                while(idx < input.length() &&
+                    Character.isDigit(input.charAt(idx))){
+                        number.append(input.charAt(idx));
+                        idx++;
+                }
+
+                System.out.println("Number: " + number);
+                continue;
             }
-            currentIdx++;
+
+            if(Character.isLetter(c)){
+                StringBuilder word = new StringBuilder();
+
+                while(idx < input.length() &&
+                    Character.isLetterOrDigit(input.charAt(idx))){
+                        word.append(input.charAt(idx));
+                        idx++;
+                }
+                System.out.println("Word: " + word);
+                continue;
+            }
+
+            if(c == '+' || c == '-' || c == '=' || c == '/' || c == '%' || c == ';'){
+                System.out.println("Operator: " + c);
+                idx++;
+                continue;
+            }
+            idx++;
+
         }
     }
-    
 }
