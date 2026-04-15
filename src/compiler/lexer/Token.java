@@ -25,6 +25,6 @@ public class Token{
     }
 
     public String toString(){
-        return this.type + ": " + this.value;  
+        return this.type + ": " + this.value + " (line " + this.line + ")" ;  
     }
 }

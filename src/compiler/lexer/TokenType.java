@@ -24,6 +24,7 @@ public enum TokenType {
     BASE16_NUMBER,
     BASE8_NUMBER,
     BASE2_NUMBER,
+    REAL_NUMBER,
     BOOL_VAL,
     STRING,
     CHAR,
@@ -51,6 +52,11 @@ public enum TokenType {
 
     LPAREN,
     RPAREN,
+    LBRACK,
+    RBRACK,
+    LBRACE,
+    RBRACE,
+    COMMA,
     SEMICOLON,
 
     EOF,
