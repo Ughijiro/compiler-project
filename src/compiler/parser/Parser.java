@@ -1,7 +1,12 @@
 package compiler.parser;
 
+import compiler.lexer.Lexer;
 import compiler.lexer.Token;
 import compiler.lexer.TokenType;
+
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Parser {
@@ -13,7 +18,13 @@ public class Parser {
     }
 
     private Token crtTk() {
+        if (crtIdx >= tokens.size()) return tokens.get(tokens.size() - 1);
         return tokens.get(crtIdx);
+    }
+
+    private void tkerr(String message) {
+        Token t = crtTk();
+        throw new RuntimeException("Syntax Error at line " + t.getLine() + " near '" + t.getValue() + "': " + message);
     }
 
     private boolean consume(TokenType type) {
@@ -24,288 +35,319 @@ public class Parser {
         return false;
     }
 
+    // --- TOP LEVEL ---
+
     public boolean unit() {
         while (!consume(TokenType.EOF)) {
             int startIdx = crtIdx;
-
             if (structDef()) continue;
             crtIdx = startIdx;
-
-            if (fnDef()) continue; // Now we try to parse functions!
+            if (fnDef()) continue;
             crtIdx = startIdx;
-
             if (varDef()) continue;
-            crtIdx = startIdx;
-
-            System.out.println("Syntax Error: Unexpected token at line " + crtTk().getLine());
-            return false;
+            tkerr("Unexpected token at top level");
         }
         return true;
     }
 
-    // Rule: fnDef ::= (typeBase | VOID) ID LPAR (fnParam (COMMA fnParam)* )? RPAR stmCompound
-    private boolean fnDef() {
-        int startIdx = crtIdx;
-
-        // Check for return type
-        if (typeBase() || consume(TokenType.VOID)) {
-            if (consume(TokenType.IDENTIFIER)) {
-                if (consume(TokenType.LPAREN)) {
-                    
-                    // Parameters are optional: (fnParam (COMMA fnParam)* )?
-                    if (fnParam()) {
-                        while (consume(TokenType.COMMA)) {
-                            if (!fnParam()) return false;
-                        }
-                    }
-                    
-                    if (consume(TokenType.RPAREN)) { // Match your Lexer's RPARAN
-                        if (stmCompound()) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        crtIdx = startIdx;
-        return false;
-    }
-
-    // Rule: fnParam ::= typeBase ID arrayDecl?
-    private boolean fnParam() {
-        int startIdx = crtIdx;
-        if (typeBase()) {
-            if (consume(TokenType.IDENTIFIER)) {
-                arrayDecl(); // optional
-                return true;
-            }
-        }
-        crtIdx = startIdx;
-        return false;
-    }
-
-    // Rule: stmCompound ::= LACC (varDef | stm)* RACC
-    // For now, this only accepts variables inside { }
-    private boolean stmCompound() {
-        int startIdx = crtIdx;
-        if (consume(TokenType.LBRACE)) {
-            
-            while (varDef() || stm()); // Accept variables or statements
-            
-            if (consume(TokenType.RBRACE)) {
-                return true;
-            }
-        }
-        crtIdx = startIdx;
-        return false;
-    }
-
-    // Rule: stm ::= stmCompound | IF(...) | WHILE(...) | FOR(...) | BREAK; | RETURN expr?; | expr?;
-    private boolean stm() {
-        int startIdx = crtIdx;
-
-        // 1. stm ::= stmCompound (Nested braces { })
-        if (stmCompound()) return true;
-        crtIdx = startIdx;
-
-        // 2. stm ::= IF LPAR expr RPAR stm (ELSE stm)?
-        if (consume(TokenType.IF)) {
-            if (consume(TokenType.LPAREN)) {
-                if (expr()) {
-                    if (consume(TokenType.RPAREN)) {
-                        if (stm()) {
-                            // The ELSE part is optional
-                            int elseIdx = crtIdx;
-                            if (consume(TokenType.ELSE)) {
-                                if (!stm()) crtIdx = elseIdx; 
-                            }
-                            return true;
-                        }
-                    }
-                }
-            }
-            crtIdx = startIdx; return false;
-        }
-
-        // 3. stm ::= WHILE LPAR expr RPAR stm
-        if (consume(TokenType.WHILE)) {
-            if (consume(TokenType.LPAREN)) {
-                if (expr()) {
-                    if (consume(TokenType.RPAREN)) {
-                        if (stm()) return true;
-                    }
-                }
-            }
-            crtIdx = startIdx; return false;
-        }
-
-        // 4. stm ::= RETURN expr? SEMICOLON
-        if (consume(TokenType.RETURN)) {
-            expr(); // optional expression
-            if (consume(TokenType.SEMICOLON)) return true;
-            crtIdx = startIdx; return false;
-        }
-
-        // 5. stm ::= expr? SEMICOLON (This is for things like x = 10; or function calls)
-        if (expr()) {
-            if (consume(TokenType.SEMICOLON)) return true;
-            crtIdx = startIdx; 
-        }
-        
-        // 6. stm ::= SEMICOLON (The empty statement ;)
-        if (consume(TokenType.SEMICOLON)) return true;
-
-        // 7. stm ::= FOR LPAR expr? ; expr? ; expr? RPAR stm
-        if (consume(TokenType.FOR)) {
-            if (consume(TokenType.LPAREN)) {
-                expr(); // optional init
-                if (consume(TokenType.SEMICOLON)) {
-                    expr(); // optional condition
-                    if (consume(TokenType.SEMICOLON)) {
-                        expr(); // optional step
-                        if (consume(TokenType.RPAREN)) {
-                            if (stm()) return true;
-                        }
-                    }
-                }
-            }
-            crtIdx = startIdx; return false;
-        }
-
-        // 8. stm ::= BREAK SEMICOLON
-        if (consume(TokenType.BREAK)) {
-            if (consume(TokenType.SEMICOLON)) return true;
-            crtIdx = startIdx; return false;
-        }
-        
-        crtIdx = startIdx;
-        return false;
-
-    }
-
-    // Rule: expr ::= exprAssign
-    private boolean expr() {
-        return exprAssign();
-    }
-
-    // Rule: exprAssign ::= exprUnary ASSIGN exprAssign | exprOr
-    private boolean exprAssign() {
-        int startIdx = crtIdx;
-        
-        // Try exprUnary = exprAssign
-        if (exprUnary()) {
-            if (consume(TokenType.ASSIGN)) {
-                if (exprAssign()) return true;
-            }
-        }
-        crtIdx = startIdx; // Backtrack to try exprOr
-
-        if (exprOr()) return true;
-
-        crtIdx = startIdx;
-        return false;
-    }
-
-    // For now, let's jump straight to the bottom to keep it working!
-    // Real parser would have Or, And, Eq, Rel, Add, Mul in between.
-    private boolean exprOr() { return exprPrimary(); }
-    private boolean exprUnary() { return exprPrimary(); }
-
-    // Rule: exprPrimary ::= ID | CT_INT | CT_REAL | LPAR expr RPAR
-    private boolean exprPrimary() {
-        int startIdx = crtIdx;
-
-        if (consume(TokenType.IDENTIFIER)) {
-            // Check for optional function call: ID ( expr? )
-            if (consume(TokenType.LPAREN)) {
-                expr(); // optional
-                consume(TokenType.RPAREN);
-            }
-            return true;
-        }
-        
-        if (consume(TokenType.BASE10_NUMBER)) return true;
-        if (consume(TokenType.REAL_NUMBER)) return true;
-        if (consume(TokenType.STRING)) return true;
-
-        if (consume(TokenType.LPAREN)) {
-            if (expr()) {
-                if (consume(TokenType.RPAREN)) return true;
-            }
-        }
-
-        crtIdx = startIdx;
-        return false;
-    }
-
-    // Rule: structDef ::= STRUCT ID LACC varDef* RACC SEMICOLON
     private boolean structDef() {
         int startIdx = crtIdx;
-
         if (consume(TokenType.STRUCT)) {
             if (consume(TokenType.IDENTIFIER)) {
-                if (consume(TokenType.LBRACE)) { // This is LACC
-                    
-                    // Consume zero or more variable definitions
+                if (consume(TokenType.LBRACE)) {
                     while (varDef()); 
-                    
-                    if (consume(TokenType.RBRACE)) { // This is RACC
-                        if (consume(TokenType.SEMICOLON)) {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        crtIdx = startIdx; // Backtrack if any part of the struct failed
-        return false;
-    }
-
-    // Rule: varDef ::= typeBase ID arrayDecl? SEMICOLON
-    private boolean varDef() {
-        int startIdx = crtIdx; // Save position for backtracking
-
-        if (typeBase()) {
-            if (consume(TokenType.IDENTIFIER)) {
-                // arrayDecl is optional (a?), so we call it but don't care if it returns false
-                arrayDecl(); 
-                
-                if (consume(TokenType.SEMICOLON)) {
+                    if (!consume(TokenType.RBRACE)) tkerr("Missing } for struct");
+                    if (!consume(TokenType.SEMICOLON)) tkerr("Missing ; after struct");
                     return true;
                 }
             }
         }
-
-        crtIdx = startIdx; // Restore finger position if rule failed
+        crtIdx = startIdx;
         return false;
     }
 
-    // Rule: typeBase ::= INT | DOUBLE | CHAR | STRUCT ID
-    private boolean typeBase() {
-        if (consume(TokenType.INT)) return true;
-        if (consume(TokenType.DOUBLE)) return true;
-        if (consume(TokenType.CHAR)) return true;
-        
-        if (consume(TokenType.STRUCT)) {
-            if (consume(TokenType.IDENTIFIER)) return true;
+    private boolean fnDef() {
+        int startIdx = crtIdx;
+        if (typeBase() || consume(TokenType.VOID)) {
+            if (consume(TokenType.IDENTIFIER)) {
+                if (consume(TokenType.LPAREN)) {
+                    if (fnParam()) {
+                        while (consume(TokenType.COMMA)) if (!fnParam()) tkerr("Invalid param");
+                    }
+                    if (consume(TokenType.RPAREN)) {
+                        if (stmCompound()) return true;
+                    }
+                }
+            }
+        }
+        crtIdx = startIdx;
+        return false;
+    }
+
+    private boolean fnParam() {
+        int startIdx = crtIdx;
+        if (typeBase()) {
+            if (consume(TokenType.IDENTIFIER)) {
+                arrayDecl();
+                return true;
+            }
+        }
+        crtIdx = startIdx;
+        return false;
+    }
+
+    private boolean stmCompound() {
+        int startIdx = crtIdx;
+        if (consume(TokenType.LBRACE)) {
+            while (varDef() || stm());
+            if (consume(TokenType.RBRACE)) return true;
+        }
+        crtIdx = startIdx;
+        return false;
+    }
+
+    // --- STATEMENTS ---
+
+    private boolean stm() {
+        int startIdx = crtIdx;
+        if (stmCompound()) return true;
+
+        if (consume(TokenType.IF)) {
+            if (!consume(TokenType.LPAREN)) tkerr("missing (");
+            if (!expr()) tkerr("invalid expression in if");
+            if (!consume(TokenType.RPAREN)) tkerr("missing )");
+            if (!stm()) tkerr("missing statement");
+            if (consume(TokenType.ELSE)) if (!stm()) tkerr("missing else statement");
+            return true;
+        }
+
+        if (consume(TokenType.WHILE)) {
+            if (!consume(TokenType.LPAREN)) tkerr("missing (");
+            if (!expr()) tkerr("invalid expression");
+            if (!consume(TokenType.RPAREN)) tkerr("missing )");
+            if (!stm()) tkerr("missing statement");
+            return true;
+        }
+
+        if (consume(TokenType.FOR)) {
+            if (!consume(TokenType.LPAREN)) tkerr("missing (");
+            expr(); 
+            if (!consume(TokenType.SEMICOLON)) tkerr("missing ; in for");
+            expr(); 
+            if (!consume(TokenType.SEMICOLON)) tkerr("missing ; in for");
+            expr(); 
+            if (!consume(TokenType.RPAREN)) tkerr("missing )");
+            if (!stm()) tkerr("missing statement");
+            return true;
+        }
+
+        if (consume(TokenType.RETURN)) {
+            expr(); 
+            if (!consume(TokenType.SEMICOLON)) tkerr("missing ;");
+            return true;
+        }
+
+        if (consume(TokenType.BREAK)) {
+            if (!consume(TokenType.SEMICOLON)) tkerr("missing ;");
+            return true;
+        }
+
+        if (expr()) {
+            if (!consume(TokenType.SEMICOLON)) tkerr("missing ; after expression");
+            return true;
+        }
+        return consume(TokenType.SEMICOLON);
+    }
+
+    // --- EXPRESSIONS ---
+
+    private boolean expr() { return exprAssign(); }
+
+    private boolean exprAssign() {
+        int startIdx = crtIdx;
+        if (exprUnary() && consume(TokenType.ASSIGN) && exprAssign()) return true;
+        crtIdx = startIdx;
+        return exprOr();
+    }
+
+    private boolean exprOr() {
+        if (exprAnd()) {
+            while (consume(TokenType.OR)) if (!exprAnd()) tkerr("invalid or");
+            return true;
         }
         return false;
     }
 
-    // Rule: arrayDecl ::= LBRACKET CT_INT? RBRACKET
+    private boolean exprAnd() {
+        if (exprEq()) {
+            while (consume(TokenType.AND)) if (!exprEq()) tkerr("invalid and");
+            return true;
+        }
+        return false;
+    }
+
+    private boolean exprEq() {
+        if (exprRel()) {
+            while (consume(TokenType.EQUAL) || consume(TokenType.NOT_EQUAL)) if (!exprRel()) tkerr("invalid eq");
+            return true;
+        }
+        return false;
+    }
+
+    private boolean exprRel() {
+        if (exprAdd()) {
+            while (consume(TokenType.LESS) || consume(TokenType.LESS_EQUAL) || 
+                   consume(TokenType.GREATER) || consume(TokenType.GREATER_EQUAL)) {
+                if (!exprAdd()) tkerr("Invalid expression in relation");
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean exprAdd() {
+        if (exprMul()) {
+            while (consume(TokenType.PLUS) || consume(TokenType.MINUS)) if (!exprMul()) tkerr("invalid add");
+            return true;
+        }
+        return false;
+    }
+
+    private boolean exprMul() {
+        if (exprCast()) {
+            while (consume(TokenType.MULTIPLY) || consume(TokenType.DIVIDE)) if (!exprCast()) tkerr("invalid mul");
+            return true;
+        }
+        return false;
+    }
+
+    private boolean exprCast() {
+        int startIdx = crtIdx;
+        if (consume(TokenType.LPAREN)) {
+            if (typeBase()) {
+                arrayDecl();
+                if (consume(TokenType.RPAREN) && exprCast()) return true;
+            }
+        }
+        crtIdx = startIdx;
+        return exprUnary();
+    }
+
+    private boolean exprUnary() {
+        int startIdx = crtIdx;
+        if ((consume(TokenType.MINUS) || consume(TokenType.NOT)) && exprUnary()) return true;
+        crtIdx = startIdx;
+        return exprPostfix();
+    }
+
+    private boolean exprPostfix() {
+        if (exprPrimary()) {
+            while (true) {
+                if (consume(TokenType.LBRACK)) {
+                    if (expr() && consume(TokenType.RBRACK)) continue;
+                    tkerr("invalid array access");
+                }
+                if (consume(TokenType.DOT)) {
+                    if (consume(TokenType.IDENTIFIER)) continue;
+                    tkerr("missing field after .");
+                }
+                break;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    private boolean exprPrimary() {
+        int startIdx = crtIdx;
+        if (consume(TokenType.IDENTIFIER)) {
+            if (consume(TokenType.LPAREN)) {
+                if (expr()) {
+                    while (consume(TokenType.COMMA)) if (!expr()) tkerr("invalid arg");
+                }
+                if (!consume(TokenType.RPAREN)) tkerr("missing )");
+            }
+            return true;
+        }
+        // ALL NUMBER TYPES MUST BE HERE
+        if (consume(TokenType.BASE10_NUMBER) || consume(TokenType.BASE16_NUMBER) || 
+            consume(TokenType.BASE8_NUMBER) || consume(TokenType.BASE2_NUMBER) ||
+            consume(TokenType.REAL_NUMBER) || consume(TokenType.STRING) || consume(TokenType.CHAR)) return true;
+        
+        if (consume(TokenType.LPAREN) && expr() && consume(TokenType.RPAREN)) return true;
+        crtIdx = startIdx;
+        return false;
+    }
+
+    // --- HELPERS ---
+
+    private boolean varDef() {
+        int startIdx = crtIdx;
+        if (typeBase()) {
+            if (consume(TokenType.IDENTIFIER)) {
+                arrayDecl();
+                while (consume(TokenType.COMMA)) {
+                    if (!consume(TokenType.IDENTIFIER)) tkerr("Expected ID");
+                    arrayDecl();
+                }
+                if (consume(TokenType.SEMICOLON)) return true;
+            }
+        }
+        crtIdx = startIdx;
+        return false;
+    }
+
+    private boolean typeBase() {
+        if (consume(TokenType.INT) || consume(TokenType.DOUBLE) || consume(TokenType.CHAR)) return true;
+        
+        int startIdx = crtIdx;
+        if (consume(TokenType.STRUCT)) {
+            if (consume(TokenType.IDENTIFIER)) {
+                return true;
+            }
+        }
+        crtIdx = startIdx;
+        return false;
+    }
+
     private boolean arrayDecl() {
         int startIdx = crtIdx;
         if (consume(TokenType.LBRACK)) {
-            // The number inside [ ] is optional: [ ] or [10]
-            consume(TokenType.BASE10_NUMBER); 
-            
+            expr(); // Change: Now we allow math like 20/4+5 inside brackets
             if (consume(TokenType.RBRACK)) {
                 return true;
             }
         }
         crtIdx = startIdx;
         return false;
+    }
+
+    public static void main(String[] args) {
+        try {
+            // Path to your .c file
+            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\9.c";
+            String input = Files.readString(Paths.get(path));
+
+            // 1. Get tokens from Lexer
+            Lexer lexer = new Lexer(input);
+            List<Token> tokens = new ArrayList<>();
+            Token t;
+            do {
+                t = lexer.getNextToken();
+                tokens.add(t);
+            } while (t.getTokenType() != TokenType.EOF);
+
+            // 2. Run Parser
+            Parser parser = new Parser(tokens);
+            if (parser.unit()) {
+                System.out.println("--- SUCCESS ---");
+                System.out.println("Syntax is CORRECT! 🎉");
+            }
+
+        } catch (Exception e) {
+            // This will catch the tkerr() "Syntax Error" messages
+            System.out.println("--- PARSER ERROR ---");
+            System.out.println(e.getMessage());
+        }
     }
 }
