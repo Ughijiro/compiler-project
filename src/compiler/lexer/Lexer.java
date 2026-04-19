@@ -107,6 +107,7 @@ public class Lexer {
             case '|':
                 if (peek() == '|') { idx += 2; return new Token(TokenType.OR, "||", tokenLine); }
                 idx++; return new Token(TokenType.BIT_OR, "|", tokenLine);
+            case '.': idx++; return new Token(TokenType.DOT, ".", tokenLine);
             case ';': idx++; return new Token(TokenType.SEMICOLON, ";", tokenLine);
             case ',': idx++; return new Token(TokenType.COMMA, ",", tokenLine);
             case '(': idx++; return new Token(TokenType.LPAREN, "(", tokenLine);
@@ -145,7 +146,15 @@ public class Lexer {
                         state = 8; idx++;
                     } else if (c == '\'') {
                         state = 9; idx++;
-                    } else {
+                    }else if (c == '.') {
+                        // FIX: If there is no digit after the dot, it's just a DOT operator
+                        if (!Character.isDigit(peek())) {
+                            return checkIfOperator(c, tokenLine);
+                        }
+                        // Otherwise, it's a real number start (.5)
+                        state = 4; buf.append('0'); buf.append(c); idx++;
+                    }
+                    else {
                         return checkIfOperator(c, tokenLine);
                     }
                     break;

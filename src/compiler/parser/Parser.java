@@ -27,12 +27,49 @@ public class Parser {
     // Rule: unit ::= (varDef)* END
     public boolean unit() {
         while (!consume(TokenType.EOF)) {
+            int startIdx = crtIdx;
+
+            // Try to parse a struct definition
+            if (structDef()) {
+                continue;
+            }
+            crtIdx = startIdx; // Backtrack if it wasn't a struct
+
+            // Try to parse a variable definition
             if (varDef()) {
                 continue;
             }
-            return false; // Error if it's not a varDef and not EOF
+            crtIdx = startIdx; // Backtrack
+
+            // If we reach here, it's a syntax error (neither struct, var, nor EOF)
+            System.out.println("Syntax Error: Expected struct or variable at line " + crtTk().getLine());
+            return false;
         }
         return true;
+    }
+
+    // Rule: structDef ::= STRUCT ID LACC varDef* RACC SEMICOLON
+    private boolean structDef() {
+        int startIdx = crtIdx;
+
+        if (consume(TokenType.STRUCT)) {
+            if (consume(TokenType.IDENTIFIER)) {
+                if (consume(TokenType.LBRACE)) { // This is LACC
+                    
+                    // Consume zero or more variable definitions
+                    while (varDef()); 
+                    
+                    if (consume(TokenType.RBRACE)) { // This is RACC
+                        if (consume(TokenType.SEMICOLON)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        crtIdx = startIdx; // Backtrack if any part of the struct failed
+        return false;
     }
 
     // Rule: varDef ::= typeBase ID arrayDecl? SEMICOLON

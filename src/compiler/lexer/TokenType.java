@@ -58,6 +58,7 @@ public enum TokenType {
     RBRACE,
     COMMA,
     SEMICOLON,
+    DOT,
 
     EOF,
     INVALID
