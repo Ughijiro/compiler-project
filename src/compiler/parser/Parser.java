@@ -101,9 +101,142 @@ public class Parser {
         return false;
     }
 
-    // Placeholder for actual statements
+    // Rule: stm ::= stmCompound | IF(...) | WHILE(...) | FOR(...) | BREAK; | RETURN expr?; | expr?;
     private boolean stm() {
-        return false; 
+        int startIdx = crtIdx;
+
+        // 1. stm ::= stmCompound (Nested braces { })
+        if (stmCompound()) return true;
+        crtIdx = startIdx;
+
+        // 2. stm ::= IF LPAR expr RPAR stm (ELSE stm)?
+        if (consume(TokenType.IF)) {
+            if (consume(TokenType.LPAREN)) {
+                if (expr()) {
+                    if (consume(TokenType.RPAREN)) {
+                        if (stm()) {
+                            // The ELSE part is optional
+                            int elseIdx = crtIdx;
+                            if (consume(TokenType.ELSE)) {
+                                if (!stm()) crtIdx = elseIdx; 
+                            }
+                            return true;
+                        }
+                    }
+                }
+            }
+            crtIdx = startIdx; return false;
+        }
+
+        // 3. stm ::= WHILE LPAR expr RPAR stm
+        if (consume(TokenType.WHILE)) {
+            if (consume(TokenType.LPAREN)) {
+                if (expr()) {
+                    if (consume(TokenType.RPAREN)) {
+                        if (stm()) return true;
+                    }
+                }
+            }
+            crtIdx = startIdx; return false;
+        }
+
+        // 4. stm ::= RETURN expr? SEMICOLON
+        if (consume(TokenType.RETURN)) {
+            expr(); // optional expression
+            if (consume(TokenType.SEMICOLON)) return true;
+            crtIdx = startIdx; return false;
+        }
+
+        // 5. stm ::= expr? SEMICOLON (This is for things like x = 10; or function calls)
+        if (expr()) {
+            if (consume(TokenType.SEMICOLON)) return true;
+            crtIdx = startIdx; 
+        }
+        
+        // 6. stm ::= SEMICOLON (The empty statement ;)
+        if (consume(TokenType.SEMICOLON)) return true;
+
+        // 7. stm ::= FOR LPAR expr? ; expr? ; expr? RPAR stm
+        if (consume(TokenType.FOR)) {
+            if (consume(TokenType.LPAREN)) {
+                expr(); // optional init
+                if (consume(TokenType.SEMICOLON)) {
+                    expr(); // optional condition
+                    if (consume(TokenType.SEMICOLON)) {
+                        expr(); // optional step
+                        if (consume(TokenType.RPAREN)) {
+                            if (stm()) return true;
+                        }
+                    }
+                }
+            }
+            crtIdx = startIdx; return false;
+        }
+
+        // 8. stm ::= BREAK SEMICOLON
+        if (consume(TokenType.BREAK)) {
+            if (consume(TokenType.SEMICOLON)) return true;
+            crtIdx = startIdx; return false;
+        }
+        
+        crtIdx = startIdx;
+        return false;
+
+    }
+
+    // Rule: expr ::= exprAssign
+    private boolean expr() {
+        return exprAssign();
+    }
+
+    // Rule: exprAssign ::= exprUnary ASSIGN exprAssign | exprOr
+    private boolean exprAssign() {
+        int startIdx = crtIdx;
+        
+        // Try exprUnary = exprAssign
+        if (exprUnary()) {
+            if (consume(TokenType.ASSIGN)) {
+                if (exprAssign()) return true;
+            }
+        }
+        crtIdx = startIdx; // Backtrack to try exprOr
+
+        if (exprOr()) return true;
+
+        crtIdx = startIdx;
+        return false;
+    }
+
+    // For now, let's jump straight to the bottom to keep it working!
+    // Real parser would have Or, And, Eq, Rel, Add, Mul in between.
+    private boolean exprOr() { return exprPrimary(); }
+    private boolean exprUnary() { return exprPrimary(); }
+
+    // Rule: exprPrimary ::= ID | CT_INT | CT_REAL | LPAR expr RPAR
+    private boolean exprPrimary() {
+        int startIdx = crtIdx;
+
+        if (consume(TokenType.IDENTIFIER)) {
+            // Check for optional function call: ID ( expr? )
+            if (consume(TokenType.LPAREN)) {
+                expr(); // optional
+                consume(TokenType.RPAREN);
+            }
+            return true;
+        }
+        
+        if (consume(TokenType.BASE10_NUMBER)) return true;
+        if (consume(TokenType.REAL_NUMBER)) return true;
+        if (consume(TokenType.STRING)) return true;
+
+        if (consume(TokenType.LPAREN)) {
+            if (expr()) {
+                if (consume(TokenType.RPAREN)) return true;
+            }
+        }
+
+        crtIdx = startIdx;
+        return false;
     }
 
     // Rule: structDef ::= STRUCT ID LACC varDef* RACC SEMICOLON
