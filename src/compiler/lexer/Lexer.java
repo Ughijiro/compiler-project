@@ -1,8 +1,11 @@
 package compiler.lexer;
+import compiler.parser.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Lexer {
 
@@ -259,30 +262,36 @@ public class Lexer {
         }
     }
 
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         try {
-            // Path to your test file
+            // 1. Read the file into a String (This is your "input")
             String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\9.c";
-            String content = Files.readString(Paths.get(path));
-            
-            Lexer lx = new Lexer(content);
-            
-            // Create a file writer to save the results
-            java.io.PrintWriter writer = new java.io.PrintWriter("output.txt");
+            String input = Files.readString(Paths.get(path));
 
-            Token token = lx.getNextToken();
-            while (token.getTokenType() != TokenType.EOF) {
-                // Write to the file instead of System.out
-                writer.println(token.toString());
-                token = lx.getNextToken();
-            }
+            // 2. Pass the string to the Lexer
+            Lexer lx = new Lexer(input);
             
-            // Always close the writer!
-            writer.close();
-            System.out.println("Lexing complete! Output saved to output.txt");
+            // 3. Collect all tokens from the Lexer into a List
+            List<Token> tokens = new ArrayList<>();
+            Token t;
+            do {
+                t = lx.getNextToken();
+                tokens.add(t);
+            } while (t.getTokenType() != TokenType.EOF);
+
+            // 4. Pass that List of tokens to the Parser
+            Parser parser = new Parser(tokens);
+            
+            // 5. Start parsing from the top-level rule (unit)
+            if (parser.unit()) {
+                System.out.println("Syntax is CORRECT! 🎉");
+            } else {
+                // If it returns false, it found a sequence it doesn't recognize
+                System.out.println("Syntax ERROR! ❌");
+            }
 
         } catch (IOException e) {
-            System.out.println("Error: " + e.getMessage());
+            System.out.println("Error reading file: " + e.getMessage());
         }
     }
 }
