@@ -4,28 +4,25 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
-public class Lexer{
+public class Lexer {
 
     private String input;
     private int idx = 0;
     private int line = 1;
 
-    public Lexer(String input){
-        this.input = input;
+    public Lexer(String input) {
+        this.input = input + "\0"; // Add a null terminator for safety
     }
 
-    //check if we don t have anymore chars
-    private boolean isAtEnd(){
-        return idx >= input.length();
+    private boolean isAtEnd() {
+        return idx >= input.length() || input.charAt(idx) == '\0';
     }
 
-    //give the current character
-    private char currentChar(){
+    private char currentChar() {
         return input.charAt(idx);
     }
 
-    //peek to the next char for the double operators
-    private char peek(){
+    private char peek() {
         if (idx + 1 >= input.length()) return '\0';
         return input.charAt(idx + 1);
     }
@@ -34,343 +31,258 @@ public class Lexer{
         return Character.isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
     }
 
-    private void skipWhiteSpace(){
-        while(!isAtEnd()){
+    private void skipWhiteSpace() {
+        while (!isAtEnd()) {
             char c = currentChar();
-
-            if(c == '\n'){
+            if (c == '\n') {
                 line++;
                 idx++;
-            }
-            else if(c == ' ' || c == '\t' || c == '\r'){
+            } else if (c == ' ' || c == '\t' || c == '\r') {
                 idx++;
-            }
-            else{
+            } else if (c == '/' && peek() == '/') {
+                idx += 2;
+                while (!isAtEnd() && currentChar() != '\n') idx++;
+            } else {
                 break;
             }
         }
     }
 
-
-    private Token checkIfKeyWord(String input, int line){
-        switch(input){
-            case "if":
-                return new Token(TokenType.IF, input, line);
-            case "else":
-                return new Token(TokenType.ELSE, input, line);
-            case "for":
-                return new Token(TokenType.FOR, input, line);
-            case "break":
-                return new Token(TokenType.BREAK, input, line);
-            case "continue":
-                return new Token(TokenType.CONTINUE, input, line);
-            case "switch":
-                return new Token(TokenType.SWITCH, input, line);
-            case "case":
-                return new Token(TokenType.CASE, input, line);
-            case "int":
-                return new Token(TokenType.INT, input, line);
-            case "double":
-                return new Token(TokenType.DOUBLE, input, line);
-            case "float":
-                return new Token(TokenType.FLOAT, input, line);
-            case "boolean":
-                return new Token(TokenType.BOOLEAN, input, line);
-            case "void":
-                return new Token(TokenType.VOID, input, line);
-            case "return":
-                return new Token(TokenType.RETURN, input, line);
-            case "while":
-                return new Token(TokenType.WHILE, input, line);
-            case "enum":
-                return new Token(TokenType.ENUM, input, line);
-            case "struct":
-                return new Token(TokenType.STRUCT, input, line);
+    // KeyWord helper from your original code
+    private Token checkIfKeyWord(String text, int tokenLine) {
+        switch (text) {
+            case "if": return new Token(TokenType.IF, text, tokenLine);
+            case "else": return new Token(TokenType.ELSE, text, tokenLine);
+            case "for": return new Token(TokenType.FOR, text, tokenLine);
+            case "break": return new Token(TokenType.BREAK, text, tokenLine);
+            case "continue": return new Token(TokenType.CONTINUE, text, tokenLine);
+            case "switch": return new Token(TokenType.SWITCH, text, tokenLine);
+            case "case": return new Token(TokenType.CASE, text, tokenLine);
+            case "int": return new Token(TokenType.INT, text, tokenLine);
+            case "double": return new Token(TokenType.DOUBLE, text, tokenLine);
+            case "float": return new Token(TokenType.FLOAT, text, tokenLine);
+            case "boolean": return new Token(TokenType.BOOLEAN, text, tokenLine);
+            case "void": return new Token(TokenType.VOID, text, tokenLine);
+            case "return": return new Token(TokenType.RETURN, text, tokenLine);
+            case "while": return new Token(TokenType.WHILE, text, tokenLine);
+            case "enum": return new Token(TokenType.ENUM, text, tokenLine);
+            case "struct": return new Token(TokenType.STRUCT, text, tokenLine);
+            case "char": return new Token(TokenType.CHAR, text, tokenLine);
             case "true":
-            case "false":
-                return new Token(TokenType.BOOL_VAL, input, line);
-            default:
-                return new Token(TokenType.IDENTIFIER, input, line);
+            case "false": return new Token(TokenType.BOOL_VAL, text, tokenLine);
+            default: return new Token(TokenType.IDENTIFIER, text, tokenLine);
         }
     }
 
-    private Token checkIfOperator(char c, int tokenLine){
-            switch(c){
-            case '+':{
-                idx++;
-                if(peek() == '+'){
-                    idx++;
-                    return new Token(TokenType.PLUS, "++", tokenLine);
-                }
-                return new Token(TokenType.PLUS, "+", tokenLine);
-            }
-            case '-':{
-                idx++;
-                if(peek() == '-'){
-                    idx++;
-                    return new Token(TokenType.MINUS, "--", tokenLine);
-                }
-                return new Token(TokenType.MINUS, "-", tokenLine);
-            }
-            case '*':{
-                idx++;
-                if(peek() == '*'){
-                    idx++;
-                    return new Token(TokenType.MULTIPLY, "**", tokenLine);
-                }
-                return new Token(TokenType.MULTIPLY, "*", tokenLine);
-            }
-            case '/': {
-                //single-line comment
-                if (peek() == '/') {
-                    idx++; // skip second /
-
-                    while (!isAtEnd() && currentChar() != '\n') {
-                        idx++;
-                    }
-
-                    return getNextToken(); // skip comment and continue
-                }
-                return new Token(TokenType.DIVIDE, "/", tokenLine);
-            }
-            case '%':{
-                idx++;
-                return new Token(TokenType.MODULO, "%", tokenLine);
-            }
-            case '=':{
-                idx++;
-                if(peek() == '='){
-                    idx++;
-                    return new Token(TokenType.EQUAL, "==", tokenLine);
-                }
-                return new Token(TokenType.ASSIGN, "=", tokenLine);
-            }
-            case '&':{
-                idx++;
-                if(peek() == '&'){
-                    idx++;
-                    return new Token(TokenType.AND, "&&", tokenLine);
-                }
-                return new Token(TokenType.BIT_AND, "&", tokenLine);
-            }
-            case '|':{
-                idx++;
-                if(peek() == '|'){
-                    idx++;
-                    return new Token(TokenType.OR, "||", tokenLine);
-                }
-                return new Token(TokenType.BIT_OR, "|", tokenLine);
-            }
-            case '!':{
-                idx++;
-                if(peek() == '='){
-                    idx++;
-                    return new Token(TokenType.NOT_EQUAL, "!=", tokenLine);
-                }
-                return new Token(TokenType.NOT, "!", tokenLine);
-            }
+    // Operator helper from your original code
+    private Token checkIfOperator(char c, int tokenLine) {
+        switch (c) {
+            case '+':
+                if (peek() == '+') { idx += 2; return new Token(TokenType.PLUS, "++", tokenLine); }
+                idx++; return new Token(TokenType.PLUS, "+", tokenLine);
+            case '-':
+                if (peek() == '-') { idx += 2; return new Token(TokenType.MINUS, "--", tokenLine); }
+                idx++; return new Token(TokenType.MINUS, "-", tokenLine);
+            case '*': idx++; return new Token(TokenType.MULTIPLY, "*", tokenLine);
+            case '/': idx++; return new Token(TokenType.DIVIDE, "/", tokenLine);
+            case '%': idx++; return new Token(TokenType.MODULO, "%", tokenLine);
+            case '=':
+                if (peek() == '=') { idx += 2; return new Token(TokenType.EQUAL, "==", tokenLine); }
+                idx++; return new Token(TokenType.ASSIGN, "=", tokenLine);
+            case '!':
+                if (peek() == '=') { idx += 2; return new Token(TokenType.NOT_EQUAL, "!=", tokenLine); }
+                idx++; return new Token(TokenType.NOT, "!", tokenLine);
             case '>':
-                idx++;
-                if(peek() == '='){
-                    idx++;
-                    return new Token(TokenType.GREATER_EQUAL, ">=", tokenLine);
-                }
-                return new Token(TokenType.GREATER, ">", tokenLine);
+                if (peek() == '=') { idx += 2; return new Token(TokenType.GREATER_EQUAL, ">=", tokenLine); }
+                idx++; return new Token(TokenType.GREATER, ">", tokenLine);
             case '<':
-                idx++;
-                if(peek() == '='){
-                    idx++;
-                    return new Token(TokenType.LESS_EQUAL, "<=", tokenLine);
-                }
-                return new Token(TokenType.LESS, "<", tokenLine);
-            case ';':{
-                idx++;
-                return new Token(TokenType.SEMICOLON, ";", tokenLine);
-            }
-            case ',':{
-                idx++;
-                return new Token(TokenType.COMMA, ",", tokenLine);
-            }
-            case '(':{
-                idx++;
-                return new Token(TokenType.LPAREN, "(", tokenLine);
-            }
-            case ')':{
-                idx++;
-                return new Token(TokenType.RPAREN, ")", tokenLine);
-            }
-            case '[':{
-                idx++;
-                return new Token(TokenType.LBRACK, "[", tokenLine);
-            }
-            case ']':{
-                idx++;
-                return new Token(TokenType.RBRACK, "]", tokenLine);
-            }
-            case '{':{
-                idx++;
-                return new Token(TokenType.LBRACE, "{", tokenLine);
-            }
-            case '}':{
-                idx++;
-                return new Token(TokenType.RBRACE, "}", tokenLine);
-            }
-            default:{
-                idx++;
-                return new Token(TokenType.INVALID, String.valueOf(c), tokenLine);
-            }
+                if (peek() == '=') { idx += 2; return new Token(TokenType.LESS_EQUAL, "<=", tokenLine); }
+                idx++; return new Token(TokenType.LESS, "<", tokenLine);
+            case '&':
+                if (peek() == '&') { idx += 2; return new Token(TokenType.AND, "&&", tokenLine); }
+                idx++; return new Token(TokenType.BIT_AND, "&", tokenLine);
+            case '|':
+                if (peek() == '|') { idx += 2; return new Token(TokenType.OR, "||", tokenLine); }
+                idx++; return new Token(TokenType.BIT_OR, "|", tokenLine);
+            case ';': idx++; return new Token(TokenType.SEMICOLON, ";", tokenLine);
+            case ',': idx++; return new Token(TokenType.COMMA, ",", tokenLine);
+            case '(': idx++; return new Token(TokenType.LPAREN, "(", tokenLine);
+            case ')': idx++; return new Token(TokenType.RPAREN, ")", tokenLine);
+            case '[': idx++; return new Token(TokenType.LBRACK, "[", tokenLine);
+            case ']': idx++; return new Token(TokenType.RBRACK, "]", tokenLine);
+            case '{': idx++; return new Token(TokenType.LBRACE, "{", tokenLine);
+            case '}': idx++; return new Token(TokenType.RBRACE, "}", tokenLine);
+            default: idx++; return new Token(TokenType.INVALID, String.valueOf(c), tokenLine);
         }
-
     }
 
-    public Token getNextToken(){
+    public Token getNextToken() {
         skipWhiteSpace();
 
-        if(isAtEnd()){
+        if (isAtEnd()) {
             return new Token(TokenType.EOF, "", line);
         }
 
-        char c = currentChar();
+        int state = 0; // State variable
+        StringBuilder buf = new StringBuilder();
         int tokenLine = line;
 
-        //IDENTIFIER
-        if(Character.isLetter(c) || currentChar() == '_'){
-            StringBuilder word = new StringBuilder();
+        while (true) {
+            char c = currentChar();
 
-            while(!isAtEnd() && (Character.isLetterOrDigit(currentChar()) || currentChar() == '_')){
-                word.append(currentChar());
-                idx++;
-            }
+            switch (state) {
+                case 0: // START
+                    if (Character.isLetter(c) || c == '_') {
+                        state = 1; buf.append(c); idx++;
+                    } else if (c == '0') {
+                        state = 2; buf.append(c); idx++;
+                    } else if (Character.isDigit(c)) {
+                        state = 3; buf.append(c); idx++;
+                    } else if (c == '"') {
+                        state = 8; idx++;
+                    } else if (c == '\'') {
+                        state = 9; idx++;
+                    } else {
+                        return checkIfOperator(c, tokenLine);
+                    }
+                    break;
 
-            return checkIfKeyWord(word.toString(), tokenLine);
-        }
-        //NUMBER
-        else if (Character.isDigit(c)) {
-        StringBuilder number = new StringBuilder();
+                case 1: // IDENTIFIER
+                    if (Character.isLetterOrDigit(c) || c == '_') {
+                        buf.append(c); idx++;
+                    } else {
+                        return checkIfKeyWord(buf.toString(), tokenLine);
+                    }
+                    break;
 
-        //starts with 0
-        if (c == '0') {
-            number.append(c);
-            idx++;
+                case 2: // Starting with 0 (check Base 2, 8, 16 or Real)
+                    if (c == 'x' || c == 'X') {
+                        buf.append(c); idx++;
+                        while (isHexDigit(currentChar())) { buf.append(currentChar()); idx++; }
+                        return new Token(TokenType.BASE16_NUMBER, buf.toString(), tokenLine);
+                    } else if (c == 'b' || c == 'B') {
+                        buf.append(c); idx++;
+                        while (currentChar() == '0' || currentChar() == '1') { buf.append(currentChar()); idx++; }
+                        return new Token(TokenType.BASE2_NUMBER, buf.toString(), tokenLine);
+                    } else if (c >= '0' && c <= '7') {
+                        while (currentChar() >= '0' && currentChar() <= '7') { buf.append(currentChar()); idx++; }
+                        return new Token(TokenType.BASE8_NUMBER, buf.toString(), tokenLine);
+                    } else if (c == '.') {
+                        state = 4; buf.append(c); idx++;
+                    } else {
+                        return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
+                    }
+                    break;
 
-            if (!isAtEnd()) {
-                char next = currentChar();
-                //binary
-                if (next == 'b' || next == 'B') {
-                    number.append(next);
-                    idx++;
+                case 3: // BASE 10 (Integer part)
+                    if (Character.isDigit(c)) {
+                        buf.append(c); idx++;
+                    } else if (c == '.') {
+                        state = 4; buf.append(c); idx++;
+                    } else if (c == 'e' || c == 'E') {
+                        state = 5; buf.append(c); idx++;
+                    } else {
+                        return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
+                    }
+                    break;
 
-                    while (!isAtEnd() && (currentChar() == '0' || currentChar() == '1')) {
-                        number.append(currentChar());
+                case 4: // REAL (Fractional part)
+                    if (Character.isDigit(c)) {
+                        buf.append(c); idx++;
+                    } else if (c == 'e' || c == 'E') {
+                        state = 5; buf.append(c); idx++;
+                    } else {
+                        return new Token(TokenType.REAL_NUMBER, buf.toString(), tokenLine);
+                    }
+                    break;
+
+                case 5: // REAL (Exponent part start)
+                    if (c == '+' || c == '-') {
+                        state = 6; buf.append(c); idx++;
+                    } else if (Character.isDigit(c)) {
+                        state = 7; buf.append(c); idx++;
+                    } else return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    break;
+
+                case 6: // Exponent Sign
+                    if (Character.isDigit(c)) {
+                        state = 7; buf.append(c); idx++;
+                    } else return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    break;
+
+                case 7: // Exponent digits
+                    if (Character.isDigit(c)) {
+                        buf.append(c); idx++;
+                    } else {
+                        return new Token(TokenType.REAL_NUMBER, buf.toString(), tokenLine);
+                    }
+                    break;
+
+                case 8: // STRING
+                    if (c == '\\') { // If we see a backslash
+                        idx++; // Skip the backslash
+                        char next = currentChar();
+                        // Handle common escapes
+                        if (next == 'n') buf.append('\n');
+                        else if (next == 't') buf.append('\t');
+                        else if (next == '"') buf.append('"');
+                        else if (next == '\\') buf.append('\\');
+                        else buf.append(next); // Just append the char if it's something else
+                        idx++;
+                    } else if (c != '"' && !isAtEnd()) {
+                        if (c == '\n') line++;
+                        buf.append(c); 
+                        idx++;
+                    } else {
+                        idx++; // skip closing "
+                        return new Token(TokenType.STRING, buf.toString(), tokenLine);
+                    }
+                    break;
+
+                case 9: // CHAR
+                    if (c == '\\') { // Handle backslash in char too like '\\'
+                        idx++;
+                        char next = currentChar();
+                        if (next == 'n') buf.append('\n');
+                        else if (next == 't') buf.append('\t');
+                        else if (next == '\'') buf.append('\'');
+                        else if (next == '\\') buf.append('\\');
+                        else buf.append(next);
+                        idx++;
+                    } else {
+                        buf.append(c);
                         idx++;
                     }
-
-                    return new Token(TokenType.BASE2_NUMBER, number.toString(), tokenLine);
-                }
-
-                //hexa
-                if (next == 'x' || next == 'X') {
-                    number.append(next);
-                    idx++;
-
-                    while (!isAtEnd() && isHexDigit(currentChar())) {
-                        number.append(currentChar());
-                        idx++;
-                    }
-
-                    return new Token(TokenType.BASE16_NUMBER, number.toString(), tokenLine);
-                }
-
-                //octal
-                if (next >= '0' && next <= '7') {
-                    while (!isAtEnd() && currentChar() >= '0' && currentChar() <= '7') {
-                        number.append(currentChar());
-                        idx++;
-                    }
-
-                    return new Token(TokenType.BASE8_NUMBER, number.toString(), tokenLine);
-                }
-            }
-
-            return new Token(TokenType.BASE10_NUMBER, number.toString(), tokenLine);
-            }
-
-            //decimal and real
-            while (!isAtEnd() && Character.isDigit(currentChar())) {
-                number.append(currentChar());
-                idx++;
-            }
-
-            // float
-            if (!isAtEnd() && currentChar() == '.') {
-                number.append('.');
-                idx++;
-
-                while (!isAtEnd() && Character.isDigit(currentChar())) {
-                    number.append(currentChar());
-                    idx++;
-                }
-
-                return new Token(TokenType.REAL_NUMBER, number.toString(), tokenLine);
-            }
-
-            return new Token(TokenType.BASE10_NUMBER, number.toString(), tokenLine);
-        }
-        else if (c == '"') {
-            StringBuilder str = new StringBuilder();
-            idx++; 
-
-            while (!isAtEnd() && currentChar() != '"') {
-                if (currentChar() == '\n') {
-                    line++;
-                }
-                str.append(currentChar());
-                idx++;
-            }
-
-            if (!isAtEnd()) {
-                idx++;
-                return new Token(TokenType.STRING, str.toString(), tokenLine);
-            } else {
-                return new Token(TokenType.INVALID, str.toString(), tokenLine);
+                    if (currentChar() == '\'') idx++; // skip closing '
+                    return new Token(TokenType.CHAR, buf.toString(), tokenLine);
             }
         }
-        else if (c == '\'') {
-            idx++;
-
-            if (isAtEnd()) {
-                return new Token(TokenType.INVALID, "", tokenLine);
-            }
-
-            char value = currentChar();
-            idx++;
-
-            if (!isAtEnd() && currentChar() == '\'') {
-                idx++;
-                return new Token(TokenType.CHAR, String.valueOf(value), tokenLine);
-            } else {
-                return new Token(TokenType.INVALID, String.valueOf(value), tokenLine);
-            }
-        }
-        //operator & more
-        return checkIfOperator(c, tokenLine);
     }
 
     public static void main(String args[]) {
-    try {
-        String input = Files.readString(Paths.get("C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\1.c"));
+        try {
+            // Path to your test file
+            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\9.c";
+            String content = Files.readString(Paths.get(path));
+            
+            Lexer lx = new Lexer(content);
+            
+            // Create a file writer to save the results
+            java.io.PrintWriter writer = new java.io.PrintWriter("output.txt");
 
-        Lexer lx = new Lexer(input);
+            Token token = lx.getNextToken();
+            while (token.getTokenType() != TokenType.EOF) {
+                // Write to the file instead of System.out
+                writer.println(token.toString());
+                token = lx.getNextToken();
+            }
+            
+            // Always close the writer!
+            writer.close();
+            System.out.println("Lexing complete! Output saved to output.txt");
 
-        Token token = lx.getNextToken();
-
-        while (token.getTokenType() != TokenType.EOF) {
-            System.out.println(token);
-            token = lx.getNextToken();
+        } catch (IOException e) {
+            System.out.println("Error: " + e.getMessage());
         }
-
-    } catch (IOException e) {
-        System.out.println("Error reading file: " + e.getMessage());
     }
-}
 }
