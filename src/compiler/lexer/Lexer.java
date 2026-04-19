@@ -264,14 +264,13 @@ public class Lexer {
 
     public static void main(String[] args) {
         try {
-            // 1. Read the file into a String (This is your "input")
-            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\9.c";
+            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\parser\\testers\\test2.c";
             String input = Files.readString(Paths.get(path));
 
-            // 2. Pass the string to the Lexer
+            // Pass the string to the Lexer
             Lexer lx = new Lexer(input);
             
-            // 3. Collect all tokens from the Lexer into a List
+            // Collect all tokens from the Lexer into a List
             List<Token> tokens = new ArrayList<>();
             Token t;
             do {
@@ -279,15 +278,15 @@ public class Lexer {
                 tokens.add(t);
             } while (t.getTokenType() != TokenType.EOF);
 
-            // 4. Pass that List of tokens to the Parser
+            // Pass that List of tokens to the Parser
             Parser parser = new Parser(tokens);
             
-            // 5. Start parsing from the top-level rule (unit)
+            // Start parsing from the top-level rule (unit)
             if (parser.unit()) {
-                System.out.println("Syntax is CORRECT! 🎉");
+                System.out.println("Syntax is CORRECT!");
             } else {
                 // If it returns false, it found a sequence it doesn't recognize
-                System.out.println("Syntax ERROR! ❌");
+                System.out.println("Syntax ERROR!");
             }
 
         } catch (IOException e) {
