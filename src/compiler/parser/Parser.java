@@ -24,28 +24,86 @@ public class Parser {
         return false;
     }
 
-    // Rule: unit ::= (varDef)* END
     public boolean unit() {
         while (!consume(TokenType.EOF)) {
             int startIdx = crtIdx;
 
-            // Try to parse a struct definition
-            if (structDef()) {
-                continue;
-            }
-            crtIdx = startIdx; // Backtrack if it wasn't a struct
+            if (structDef()) continue;
+            crtIdx = startIdx;
 
-            // Try to parse a variable definition
-            if (varDef()) {
-                continue;
-            }
-            crtIdx = startIdx; // Backtrack
+            if (fnDef()) continue; // Now we try to parse functions!
+            crtIdx = startIdx;
 
-            // If we reach here, it's a syntax error (neither struct, var, nor EOF)
-            System.out.println("Syntax Error: Expected struct or variable at line " + crtTk().getLine());
+            if (varDef()) continue;
+            crtIdx = startIdx;
+
+            System.out.println("Syntax Error: Unexpected token at line " + crtTk().getLine());
             return false;
         }
         return true;
+    }
+
+    // Rule: fnDef ::= (typeBase | VOID) ID LPAR (fnParam (COMMA fnParam)* )? RPAR stmCompound
+    private boolean fnDef() {
+        int startIdx = crtIdx;
+
+        // Check for return type
+        if (typeBase() || consume(TokenType.VOID)) {
+            if (consume(TokenType.IDENTIFIER)) {
+                if (consume(TokenType.LPAREN)) {
+                    
+                    // Parameters are optional: (fnParam (COMMA fnParam)* )?
+                    if (fnParam()) {
+                        while (consume(TokenType.COMMA)) {
+                            if (!fnParam()) return false;
+                        }
+                    }
+                    
+                    if (consume(TokenType.RPAREN)) { // Match your Lexer's RPARAN
+                        if (stmCompound()) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        crtIdx = startIdx;
+        return false;
+    }
+
+    // Rule: fnParam ::= typeBase ID arrayDecl?
+    private boolean fnParam() {
+        int startIdx = crtIdx;
+        if (typeBase()) {
+            if (consume(TokenType.IDENTIFIER)) {
+                arrayDecl(); // optional
+                return true;
+            }
+        }
+        crtIdx = startIdx;
+        return false;
+    }
+
+    // Rule: stmCompound ::= LACC (varDef | stm)* RACC
+    // For now, this only accepts variables inside { }
+    private boolean stmCompound() {
+        int startIdx = crtIdx;
+        if (consume(TokenType.LBRACE)) {
+            
+            while (varDef() || stm()); // Accept variables or statements
+            
+            if (consume(TokenType.RBRACE)) {
+                return true;
+            }
+        }
+        crtIdx = startIdx;
+        return false;
+    }
+
+    // Placeholder for actual statements
+    private boolean stm() {
+        return false; 
     }
 
     // Rule: structDef ::= STRUCT ID LACC varDef* RACC SEMICOLON

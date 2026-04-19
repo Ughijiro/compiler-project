@@ -273,7 +273,7 @@ public class Lexer {
 
     public static void main(String[] args) {
         try {
-            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\parser\\testers\\test2.c";
+            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\parser\\testers\\test4.c";
             String input = Files.readString(Paths.get(path));
 
             // Pass the string to the Lexer
@@ -284,6 +284,7 @@ public class Lexer {
             Token t;
             do {
                 t = lx.getNextToken();
+                //System.out.println(t);
                 tokens.add(t);
             } while (t.getTokenType() != TokenType.EOF);
 
