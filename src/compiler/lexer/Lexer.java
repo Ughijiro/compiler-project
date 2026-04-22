@@ -2,8 +2,6 @@ package compiler.lexer;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
 
 public class Lexer {
 
@@ -11,41 +9,58 @@ public class Lexer {
     private int idx = 0;
     private int line = 1;
 
+    private enum State {
+        START,
+        IDENTIFIER,
+
+        ZERO,
+        BASE8,
+        BASE16,
+        BASE2,
+        BASE10,
+
+        FRAC,
+        EXP,
+        SIGN,
+        POWER,
+
+        STRING,
+        CHAR,
+
+        COMMENT,
+
+        NOT,
+        ASSIGN
+    }
+
     public Lexer(String input) {
-        this.input = input + "\0"; // null terminator
+        this.input = input;
     }
 
     private boolean isAtEnd() {
-        return idx >= input.length() || input.charAt(idx) == '\0';
+        return idx >= input.length();
     }
 
-    private char currentChar(){
+    private char currentChar() {
+        if (isAtEnd()) return '\0';
         return input.charAt(idx);
-    }
-
-    private char peek() {
-        if (idx + 1 >= input.length()) return '\0';
-        return input.charAt(idx + 1);
     }
 
     private void skipSpaces() {
         while (!isAtEnd()) {
-            char c = input.charAt(idx);
+            char c = currentChar();
+
             if (c == '\n') {
                 line++;
                 idx++;
             } else if (c == ' ' || c == '\t' || c == '\r') {
                 idx++;
-            } else if (c == '/' && peek() == '/') {
-                // simple comment skip
-                while (!isAtEnd() && input.charAt(idx) != '\n') idx++;
             } else {
                 break;
             }
         }
     }
 
-    // Instead of HashMaps, we use a simple switch
     private Token checkIfKeyword(String word, int tokenLine) {
         switch (word) {
             case "if": return new Token(TokenType.IF, word, tokenLine);
@@ -59,209 +74,206 @@ public class Lexer {
             case "char": return new Token(TokenType.CHAR, word, tokenLine);
             case "void": return new Token(TokenType.VOID, word, tokenLine);
             case "struct": return new Token(TokenType.STRUCT, word, tokenLine);
-            default: return new Token(TokenType.IDENTIFIER, word, tokenLine);
+            case "true":
+            case "false":
+                return new Token(TokenType.BOOL_VAL, word, tokenLine);
+            default:
+                return new Token(TokenType.IDENTIFIER, word, tokenLine);
         }
     }
 
-    private Token checkIfOperator(char c, int tokenLine) {
-        idx++; // Consume the first character (like < or =)
-        
+    private Token makeOperator(char c, int line) {
+        idx++;
+
         switch (c) {
-            case '+': 
-                if (!isAtEnd() && currentChar() == '+') { idx++; return new Token(TokenType.PLUS, "++", tokenLine); }
-                return new Token(TokenType.PLUS, "+", tokenLine);
+            case '+':
+                if (currentChar() == '+') { idx++; return new Token(TokenType.PLUS, "++", line); }
+                return new Token(TokenType.PLUS, "+", line);
             case '-':
-                if (!isAtEnd() && currentChar() == '-') { idx++; return new Token(TokenType.MINUS, "--", tokenLine); }
-                return new Token(TokenType.MINUS, "-", tokenLine);
-            case '*': return new Token(TokenType.MULTIPLY, "*", tokenLine);
-            case '/': return new Token(TokenType.DIVIDE, "/", tokenLine);
+                if (currentChar() == '-') { idx++; return new Token(TokenType.MINUS, "--", line); }
+                return new Token(TokenType.MINUS, "-", line);
+            case '*': return new Token(TokenType.MULTIPLY, "*", line);
+            case '/': return new Token(TokenType.DIVIDE, "/", line);
             case '=':
-                if (!isAtEnd() && currentChar() == '=') { idx++; return new Token(TokenType.EQUAL, "==", tokenLine); }
-                return new Token(TokenType.ASSIGN, "=", tokenLine);
+                if (currentChar() == '=') { idx++; return new Token(TokenType.EQUAL, "==", line); }
+                return new Token(TokenType.ASSIGN, "=", line);
             case '!':
-                if (!isAtEnd() && currentChar() == '=') { idx++; return new Token(TokenType.NOT_EQUAL, "!=", tokenLine); }
-                return new Token(TokenType.NOT, "!", tokenLine);
-            case '>':
-                if (!isAtEnd() && currentChar() == '=') { idx++; return new Token(TokenType.GREATER_EQUAL, ">=", tokenLine); }
-                return new Token(TokenType.GREATER, ">", tokenLine);
+                if (currentChar() == '=') { idx++; return new Token(TokenType.NOT_EQUAL, "!=", line); }
+                return new Token(TokenType.NOT, "!", line);
             case '<':
-                if (!isAtEnd() && currentChar() == '=') { idx++; return new Token(TokenType.LESS_EQUAL, "<=", tokenLine); }
-                return new Token(TokenType.LESS, "<", tokenLine);
+                if (currentChar() == '=') { idx++; return new Token(TokenType.LESS_EQUAL, "<=", line); }
+                return new Token(TokenType.LESS, "<", line);
+            case '>':
+                if (currentChar() == '=') { idx++; return new Token(TokenType.GREATER_EQUAL, ">=", line); }
+                return new Token(TokenType.GREATER, ">", line);
             case '&':
-                if (!isAtEnd() && currentChar() == '&') { idx++; return new Token(TokenType.AND, "&&", tokenLine); }
-                return new Token(TokenType.BIT_AND, "&", tokenLine);
+                if (currentChar() == '&') { idx++; return new Token(TokenType.AND, "&&", line); }
+                return new Token(TokenType.BIT_AND, "&", line);
             case '|':
-                if (!isAtEnd() && currentChar() == '|') { idx++; return new Token(TokenType.OR, "||", tokenLine); }
-                return new Token(TokenType.BIT_OR, "|", tokenLine);
-            case ';': return new Token(TokenType.SEMICOLON, ";", tokenLine);
-            case ',': return new Token(TokenType.COMMA, ",", tokenLine);
-            case '(': return new Token(TokenType.LPAREN, "(", tokenLine);
-            case ')': return new Token(TokenType.RPAREN, ")", tokenLine);
-            case '[': return new Token(TokenType.LBRACK, "[", tokenLine);
-            case ']': return new Token(TokenType.RBRACK, "]", tokenLine);
-            case '{': return new Token(TokenType.LBRACE, "{", tokenLine);
-            case '}': return new Token(TokenType.RBRACE, "}", tokenLine);
-            case '.': return new Token(TokenType.DOT, ".", tokenLine);
-            default: return new Token(TokenType.INVALID, String.valueOf(c), tokenLine);
+                if (currentChar() == '|') { idx++; return new Token(TokenType.OR, "||", line); }
+                return new Token(TokenType.BIT_OR, "|", line);
+            case '.': return new Token(TokenType.DOT, ".", line);
+            case ';': return new Token(TokenType.SEMICOLON, ";", line);
+            case ',': return new Token(TokenType.COMMA, ",", line);
+            case '(': return new Token(TokenType.LPAREN, "(", line);
+            case ')': return new Token(TokenType.RPAREN, ")", line);
+            case '[': return new Token(TokenType.LBRACK, "[", line);
+            case ']': return new Token(TokenType.RBRACK, "]", line);
+            case '{': return new Token(TokenType.LBRACE, "{", line);
+            case '}': return new Token(TokenType.RBRACE, "}", line);
+            default: return new Token(TokenType.INVALID, String.valueOf(c), line);
         }
     }
 
     public Token getNextToken() {
         skipSpaces();
-
         if (isAtEnd()) return new Token(TokenType.EOF, "", line);
 
-        int state = 0; // State variable from the diagram
+        State state = State.START;
         StringBuilder buf = new StringBuilder();
         int tokenLine = line;
 
         while (true) {
-            char c = input.charAt(idx);
-
+            char c = currentChar();
             switch (state) {
-                case 0: // Start state
-                    if (Character.isLetter(c) || c == '_') {
-                        state = 12; buf.append(c); idx++;
-                    } else if (c == '0') {
-                        state = 1; buf.append(c); idx++;
-                    } else if (Character.isDigit(c)) {
-                        state = 5; buf.append(c); idx++;
-                    } else if (c == '"') {
-                        state = 14; idx++;
-                    } else if (c == '\'') {
-                        state = 13; idx++;
-                    } else if (c == '.') {
-                        // Check if it's a number like .5 or a struct dot
-                        if (Character.isDigit(peek())) {
-                            state = 7; buf.append('0'); buf.append(c); idx++;
-                        } else {
-                            idx++; return new Token(TokenType.DOT, ".", tokenLine);
-                        }
-                    } else {
-                        return checkIfOperator(c, tokenLine);
-                    }
+                case START:
+                    if (Character.isLetter(c) || c == '_') { state = State.IDENTIFIER; buf.append(c); idx++; }
+                    else if (c == '0') { state = State.ZERO; buf.append(c); idx++; }
+                    else if (c >= '1' && c <= '9') { state = State.BASE10; buf.append(c); idx++; }
+                    else if (c == '"') { state = State.STRING; idx++; }
+                    else if (c == '\'') { state = State.CHAR; idx++; }
+                    else if (c == '/') { state = State.COMMENT; idx++; }
+                    else return makeOperator(c, tokenLine);
                     break;
 
-                case 1: // After seeing a '0'
-                    if (c == 'x' || c == 'X') {
-                        state = 3; buf.setLength(0); idx++; // Hex start
-                    } else if (c == 'b' || c == 'B') {
-                        state = 4; buf.setLength(0); idx++; // Bin start
-                    } else if (c >= '0' && c <= '7') {
-                        state = 2; buf.append(c); idx++; // Octal loop
-                    } else if (c == '.') {
-                        state = 7; buf.append(c); idx++; // Real number
-                    } else {
-                        return new Token(TokenType.BASE10_NUMBER, "0", tokenLine);
-                    }
+                case IDENTIFIER:
+                    if (Character.isLetterOrDigit(c) || c == '_') { buf.append(c); idx++; }
+                    else return checkIfKeyword(buf.toString(), tokenLine);
                     break;
 
-                case 2: // Octal numbers
+                case ZERO:
+                    if (c == 'x' || c == 'X') { state = State.BASE16; buf.append(c); idx++; }
+                    else if (c == 'b' || c == 'B') { state = State.BASE2; buf.append(c); idx++; }
+                    else if (c >= '0' && c <= '7') { state = State.BASE8; buf.append(c); idx++; }
+                    else if (c == '.') { state = State.FRAC; buf.append('.'); idx++; }
+                    else if (c == 'e' || c == 'E') { state = State.EXP; buf.append(c); idx++; }
+                    else return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
+                    break;
+
+                case BASE10:
+                    if (Character.isDigit(c)) { buf.append(c); idx++; }
+                    else if (c == '.') { state = State.FRAC; buf.append('.'); idx++; }
+                    else if (c == 'e' || c == 'E') { state = State.EXP; buf.append(c); idx++; }
+                    else return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
+                    break;
+
+                case BASE16:
+                    if (Character.isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) { buf.append(c); idx++; }
+                    else return new Token(TokenType.BASE16_NUMBER, buf.toString(), tokenLine);
+                    break;
+                
+                case BASE8:
                     if (c >= '0' && c <= '7') { buf.append(c); idx++; }
                     else return new Token(TokenType.BASE8_NUMBER, buf.toString(), tokenLine);
                     break;
 
-                case 3: // Hex numbers
-                    if (Character.isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-                        buf.append(c); idx++;
-                    } else return new Token(TokenType.BASE16_NUMBER, buf.toString(), tokenLine);
-                    break;
-
-                case 4: // Binary numbers
+                case BASE2:
                     if (c == '0' || c == '1') { buf.append(c); idx++; }
                     else return new Token(TokenType.BASE2_NUMBER, buf.toString(), tokenLine);
                     break;
 
-                case 5: // Base 10 numbers
+                case FRAC:
                     if (Character.isDigit(c)) { buf.append(c); idx++; }
-                    else if (c == '.') { state = 7; buf.append(c); idx++; }
-                    else if (c == 'e' || c == 'E') { state = 8; buf.append(c); idx++; }
-                    else return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
-                    break;
-
-                case 7: // Fractional part of Real numbers
-                    if (Character.isDigit(c)) { buf.append(c); idx++; }
-                    else if (c == 'e' || c == 'E') { state = 8; buf.append(c); idx++; }
+                    else if (c == 'e' || c == 'E') { state = State.EXP; buf.append(c); idx++; }
                     else return new Token(TokenType.REAL_NUMBER, buf.toString(), tokenLine);
                     break;
 
-                case 8: // Exponent part
-                    if (c == '+' || c == '-') { state = 10; buf.append(c); idx++; }
-                    else if (Character.isDigit(c)) { state = 11; buf.append(c); idx++; }
+                case EXP:
+                    if (c == '+' || c == '-') { state = State.SIGN; buf.append(c); idx++; }
+                    else if (Character.isDigit(c)) { state = State.POWER; buf.append(c); idx++; }
                     else return new Token(TokenType.INVALID, buf.toString(), tokenLine);
                     break;
 
-                case 10: // Exponent sign
-                    if (Character.isDigit(c)) { state = 11; buf.append(c); idx++; }
+                case SIGN:
+                    if (Character.isDigit(c)) { state = State.POWER; buf.append(c); idx++; }
                     else return new Token(TokenType.INVALID, buf.toString(), tokenLine);
                     break;
 
-                case 11: // Exponent power
+                case POWER:
                     if (Character.isDigit(c)) { buf.append(c); idx++; }
                     else return new Token(TokenType.REAL_NUMBER, buf.toString(), tokenLine);
                     break;
 
-                case 12: // Identifiers
-                    if (Character.isLetterOrDigit(c) || c == '_') {
-                        buf.append(c); idx++;
-                    } else {
-                        return checkIfKeyword(buf.toString(), tokenLine);
-                    }
+                case COMMENT:
+                    if (c == '/') {
+                        while (!isAtEnd() && currentChar() != '\n') idx++;
+                        skipSpaces();
+                        if (isAtEnd()) return new Token(TokenType.EOF, "", line);
+                        state = State.START;
+                        buf.setLength(0);
+                    } else return new Token(TokenType.DIVIDE, "/", tokenLine);
                     break;
 
-                case 13: // Character literals
-                    if (c == '\\') { // Handle escapes manually
-                        idx++;
-                        char next = input.charAt(idx);
-                        if (next == 'n') buf.append('\n');
-                        else if (next == 't') buf.append('\t');
-                        else buf.append(next);
-                        idx++;
-                    } else if (c != '\'') {
-                        buf.append(c); idx++;
-                    } else {
-                        idx++; return new Token(TokenType.CHAR, buf.toString(), tokenLine);
-                    }
-                    break;
-
-                case 14: // String literals
+                  case STRING:
                     if (c == '\\') {
                         idx++;
-                        char next = input.charAt(idx);
+                        char next = currentChar();
                         if (next == 'n') buf.append('\n');
                         else if (next == 't') buf.append('\t');
                         else buf.append(next);
                         idx++;
-                    } else if (c != '"' && !isAtEnd()) {
+                    }
+                    else if (c == '"') {
+                        idx++;
+                        return new Token(TokenType.STRING, buf.toString(), tokenLine);
+                    }
+                    else {
+                        buf.append(c);
                         if (c == '\n') line++;
-                        buf.append(c); idx++;
-                    } else {
-                        idx++; return new Token(TokenType.STRING, buf.toString(), tokenLine);
+                        idx++;
                     }
                     break;
+
+                case CHAR:
+                    char value;
+                    if (c == '\\') {
+                        idx++;
+                        char next = currentChar();
+                        if (next == 'n') value = '\n';
+                        else if (next == 't') value = '\t';
+                        else value = next;
+                        idx++;
+                    } else {
+                        value = c;
+                        idx++;
+                    }
+
+                    if (currentChar() == '\'') {
+                        idx++;
+                        return new Token(TokenType.CHAR, String.valueOf(value), tokenLine);
+                    }
+                    return new Token(TokenType.INVALID, "", tokenLine);
+                default:
+                    throw new RuntimeException("Unknown state: " + state);
             }
         }
     }
 
     public static void main(String[] args) {
         try {
-            // Path to your .c file
-            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\9.c";
+            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\8.c"; // change this path
             String input = Files.readString(Paths.get(path));
 
             Lexer lexer = new Lexer(input);
-            List<Token> tokens = new ArrayList<>();
             Token t;
 
-            System.out.println("--- LEXER TOKENS ---");
             do {
                 t = lexer.getNextToken();
-                tokens.add(t);
-                System.out.println(t.toString());
+                System.out.println(t);
             } while (t.getTokenType() != TokenType.EOF);
 
         } catch (Exception e) {
-            System.out.println("Lexer Error: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

@@ -109,7 +109,7 @@ public class Parser {
     // --- STATEMENTS ---
 
     private boolean stm() {
-        int startIdx = crtIdx;
+        //int startIdx = crtIdx;
         if (stmCompound()) return true;
 
         if (consume(TokenType.IF)) {
