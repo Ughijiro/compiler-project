@@ -261,7 +261,7 @@ public class Lexer {
 
     public static void main(String[] args) {
         try {
-            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\8.c"; // change this path
+            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\8.c";
             String input = Files.readString(Paths.get(path));
 
             Lexer lexer = new Lexer(input);
