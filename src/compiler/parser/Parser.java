@@ -199,12 +199,29 @@ public class Parser {
         return false;
     }
 
-    private boolean stmCompound() {
+    private boolean stmCompound(boolean newDomain) {
         int startIdx = crtIdx;
+
         if (consume(TokenType.LBRACE)) {
+
+            if (newDomain) {
+                symbolTable.pushDomain();
+            }
+
             while (varDef() || stm());
-            if (consume(TokenType.RBRACE)) return true;
+
+            if (consume(TokenType.RBRACE)) {
+
+                if (newDomain) {
+                    symbolTable.dropDomain();
+                }
+
+                return true;
+            }
+
+            tkerr("Missing }");
         }
+
         crtIdx = startIdx;
         return false;
     }
@@ -213,7 +230,7 @@ public class Parser {
 
     private boolean stm() {
         //int startIdx = crtIdx;
-        if (stmCompound()) return true;
+        if (stmCompound(true)) return true;
 
         if (consume(TokenType.IF)) {
             if (!consume(TokenType.LPAREN)) tkerr("missing (");
@@ -326,12 +343,21 @@ public class Parser {
 
     private boolean exprCast() {
         int startIdx = crtIdx;
+
         if (consume(TokenType.LPAREN)) {
-            if (typeBase()) {
-                arrayDecl();
-                if (consume(TokenType.RPAREN) && exprCast()) return true;
+
+            Type castType = new Type(null);
+
+            if (typeBase(castType)) {
+
+                arrayDecl(castType);
+
+                if (consume(TokenType.RPAREN) && exprCast()) {
+                    return true;
+                }
             }
         }
+
         crtIdx = startIdx;
         return exprUnary();
     }
