@@ -1,7 +1,5 @@
 package compiler.semantic;
 
-
-
 public class Type {
 
     public TypeBase typeBase;
