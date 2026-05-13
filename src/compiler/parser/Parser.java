@@ -113,30 +113,88 @@ public class Parser {
 
     private boolean fnDef() {
         int startIdx = crtIdx;
-        if (typeBase() || consume(TokenType.VOID)) {
+
+        Type returnType = new Type(null);
+
+        if (typeBase(returnType) || consume(TokenType.VOID)) {
+
+            if (returnType.typeBase == null) {
+                returnType.typeBase = TypeBase.TB_VOID;
+                returnType.nElements = -1;
+            }
+
             if (consume(TokenType.IDENTIFIER)) {
+
+                String fnName = consumedTk.getValue();
+
+                if (symbolTable.findInCurrentDomain(fnName) != null) {
+                    semanticError("Symbol redefinition: " + fnName);
+                }
+
+                Symbol fnSymbol = new Symbol(fnName, SymbolKind.SK_FN);
+                fnSymbol.type = returnType;
+
+                symbolTable.addSymbol(fnSymbol);
+
+                Symbol oldOwner = currentOwner;
+                currentOwner = fnSymbol;
+
                 if (consume(TokenType.LPAREN)) {
+
+                    symbolTable.pushDomain();
+
                     if (fnParam()) {
-                        while (consume(TokenType.COMMA)) if (!fnParam()) tkerr("Invalid param");
+                        while (consume(TokenType.COMMA)) {
+                            if (!fnParam()) {
+                                tkerr("Invalid parameter");
+                            }
+                        }
                     }
+
                     if (consume(TokenType.RPAREN)) {
-                        if (stmCompound()) return true;
+                        if (stmCompound(false)) {
+                            symbolTable.dropDomain();
+                            currentOwner = oldOwner;
+                            return true;
+                        }
                     }
                 }
             }
         }
+
         crtIdx = startIdx;
         return false;
     }
 
     private boolean fnParam() {
         int startIdx = crtIdx;
-        if (typeBase()) {
+
+        Type paramType = new Type(null);
+
+        if (typeBase(paramType)) {
             if (consume(TokenType.IDENTIFIER)) {
-                arrayDecl();
+
+                String paramName = consumedTk.getValue();
+
+                arrayDecl(paramType);
+
+                if (symbolTable.findInCurrentDomain(paramName) != null) {
+                    semanticError("Symbol redefinition: " + paramName);
+                }
+
+                Symbol paramSymbol = new Symbol(paramName, SymbolKind.SK_PARAM);
+                paramSymbol.type = paramType;
+
+                symbolTable.addSymbol(paramSymbol);
+
+                if (currentOwner != null && currentOwner.kind == SymbolKind.SK_FN) {
+                    currentOwner.fnParams.add(paramSymbol);
+                }
+
                 return true;
             }
         }
+
         crtIdx = startIdx;
         return false;
     }
