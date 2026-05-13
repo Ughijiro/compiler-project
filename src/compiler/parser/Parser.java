@@ -328,41 +328,133 @@ public class Parser {
 
     private boolean varDef() {
         int startIdx = crtIdx;
-        if (typeBase()) {
+
+        Type varType = new Type(null);
+
+        if (typeBase(varType)) {
+
             if (consume(TokenType.IDENTIFIER)) {
-                arrayDecl();
-                while (consume(TokenType.COMMA)) {
-                    if (!consume(TokenType.IDENTIFIER)) tkerr("Expected ID");
-                    arrayDecl();
+
+                String varName = consumedTk.getValue();
+
+                arrayDecl(varType);
+
+                if (symbolTable.findInCurrentDomain(varName) != null) {
+                    semanticError("Symbol redefinition: " + varName);
                 }
-                if (consume(TokenType.SEMICOLON)) return true;
+
+                Symbol varSymbol = new Symbol(varName, SymbolKind.SK_VAR);
+                varSymbol.type = varType;
+
+                if (currentOwner != null &&
+                    currentOwner.kind == SymbolKind.SK_STRUCT) {
+
+                    currentOwner.structMembers.add(varSymbol);
+                }
+
+                symbolTable.addSymbol(varSymbol);
+
+                while (consume(TokenType.COMMA)) {
+
+                    if (!consume(TokenType.IDENTIFIER)) {
+                        tkerr("Expected identifier");
+                    }
+
+                    String extraName = consumedTk.getValue();
+
+                    Type extraType = new Type(varType.typeBase);
+                    extraType.structSymbol = varType.structSymbol;
+                    extraType.nElements = varType.nElements;
+
+                    arrayDecl(extraType);
+
+                    if (symbolTable.findInCurrentDomain(extraName) != null) {
+                        semanticError("Symbol redefinition: " + extraName);
+                    }
+
+                    Symbol extraVar = new Symbol(extraName, SymbolKind.SK_VAR);
+                    extraVar.type = extraType;
+
+                    if (currentOwner != null &&
+                        currentOwner.kind == SymbolKind.SK_STRUCT) {
+
+                        currentOwner.structMembers.add(extraVar);
+                    }
+
+                    symbolTable.addSymbol(extraVar);
+                }
+
+                if (consume(TokenType.SEMICOLON)) {
+                    return true;
+                }
             }
         }
+
         crtIdx = startIdx;
         return false;
     }
 
-    private boolean typeBase() {
-        if (consume(TokenType.INT) || consume(TokenType.DOUBLE) || consume(TokenType.CT_CHAR)) return true;
-        
+    private boolean typeBase(Type type) {
+        if (consume(TokenType.INT)) {
+            type.typeBase = TypeBase.TB_INT;
+            type.nElements = -1;
+            return true;
+        }
+
+        if (consume(TokenType.DOUBLE)) {
+            type.typeBase = TypeBase.TB_DOUBLE;
+            type.nElements = -1;
+            return true;
+        }
+
+        if (consume(TokenType.CHAR)) {
+            type.typeBase = TypeBase.TB_CHAR;
+            type.nElements = -1;
+            return true;
+        }
+
         int startIdx = crtIdx;
+
         if (consume(TokenType.STRUCT)) {
             if (consume(TokenType.IDENTIFIER)) {
+                String structName = consumedTk.getValue();
+
+                Symbol structSymbol = symbolTable.findSymbol(structName);
+
+                if (structSymbol == null || structSymbol.kind != SymbolKind.SK_STRUCT) {
+                    semanticError("Undefined struct: " + structName);
+                }
+
+                type.typeBase = TypeBase.TB_STRUCT;
+                type.structSymbol = structSymbol;
+                type.nElements = -1;
+
                 return true;
             }
         }
+
         crtIdx = startIdx;
         return false;
     }
 
-    private boolean arrayDecl() {
+    private boolean arrayDecl(Type type) {
         int startIdx = crtIdx;
+
         if (consume(TokenType.LBRACK)) {
-            expr(); // Change: Now we allow math like 20/4+5 inside brackets
+
+            if (expr()) {
+                type.nElements = 0; // array with expression size
+            } else {
+                type.nElements = 0; // int v[]
+            }
+
             if (consume(TokenType.RBRACK)) {
                 return true;
             }
+
+            tkerr("Missing ] in array declaration");
         }
+
         crtIdx = startIdx;
         return false;
     }
