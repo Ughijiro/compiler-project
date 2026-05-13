@@ -3,6 +3,7 @@ package compiler.lexer;
 public enum TokenType {
     
     IDENTIFIER,
+
     IF,
     ELSE,
     FOR,
@@ -27,7 +28,8 @@ public enum TokenType {
     REAL_NUMBER,
     BOOL_VAL,
     STRING,
-    CHAR,
+    CT_CHAR,     // character literal: 'a'
+    CHAR,        // keyword: char
 
     ASSIGN,
     EQUAL,
@@ -62,5 +64,4 @@ public enum TokenType {
 
     EOF,
     INVALID
-
 }

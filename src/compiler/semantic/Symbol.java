@@ -3,20 +3,9 @@ package compiler.semantic;
 import java.util.ArrayList;
 import java.util.List;
 
-enum SymbolKind {
-    SK_VAR,
-    SK_PARAM,
-    SK_FN,
-    SK_STRUCT
-}
-
-enum MemoryLocation {
-    MEM_GLOBAL,
-    MEM_ARG,
-    MEM_LOCAL
-}
 
 public class Symbol {
+
     public String name;
     public SymbolKind kind;
     public MemoryLocation mem;

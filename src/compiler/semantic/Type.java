@@ -1,14 +1,9 @@
 package compiler.semantic;
 
-enum TypeBase {
-    TB_INT,
-    TB_DOUBLE,
-    TB_CHAR,
-    TB_VOID,
-    TB_STRUCT
-}
+
 
 public class Type {
+
     public TypeBase typeBase;
     public Symbol structSymbol; // Only used if typeBase is TB_STRUCT
     public int nElements;      // -1 for non-array, 0 for int v[], >0 for int v[10]

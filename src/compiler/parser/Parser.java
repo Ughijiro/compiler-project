@@ -1,8 +1,7 @@
 package compiler.parser;
 
-import compiler.lexer.Lexer;
-import compiler.lexer.Token;
-import compiler.lexer.TokenType;
+import compiler.lexer.*;
+import compiler.semantic.*;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -12,6 +11,10 @@ import java.util.List;
 public class Parser {
     private List<Token> tokens;
     private int crtIdx = 0;
+    private Token consumedTk;
+
+    private SymbolTable symbolTable = new SymbolTable();
+    private Symbol currentOwner = null;
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
@@ -29,10 +32,23 @@ public class Parser {
 
     private boolean consume(TokenType type) {
         if (crtTk().getTokenType() == type) {
+            consumedTk = crtTk();
             crtIdx++;
             return true;
         }
         return false;
+    }
+
+    private void semanticError(String message) {
+        Token t = crtTk();
+        throw new RuntimeException(
+            "Semantic Error at line " +
+            t.getLine() +
+            " near '" +
+            t.getValue() +
+            "': " +
+            message
+        );
     }
 
     // --- TOP LEVEL ---
@@ -52,16 +68,45 @@ public class Parser {
 
     private boolean structDef() {
         int startIdx = crtIdx;
+
         if (consume(TokenType.STRUCT)) {
             if (consume(TokenType.IDENTIFIER)) {
+
+                String structName = consumedTk.getValue();
+
+                if (symbolTable.findInCurrentDomain(structName) != null) {
+                    semanticError("Symbol redefinition: " + structName);
+                }
+
+                Symbol structSymbol = new Symbol(structName, SymbolKind.SK_STRUCT);
+                structSymbol.type = new Type(TypeBase.TB_STRUCT);
+                structSymbol.type.structSymbol = structSymbol;
+
+                symbolTable.addSymbol(structSymbol);
+
+                currentOwner = structSymbol;
+                symbolTable.pushDomain();
+
                 if (consume(TokenType.LBRACE)) {
-                    while (varDef()); 
-                    if (!consume(TokenType.RBRACE)) tkerr("Missing } for struct");
-                    if (!consume(TokenType.SEMICOLON)) tkerr("Missing ; after struct");
+
+                    while (varDef());
+
+                    if (!consume(TokenType.RBRACE)) {
+                        tkerr("Missing } for struct");
+                    }
+
+                    if (!consume(TokenType.SEMICOLON)) {
+                        tkerr("Missing ; after struct");
+                    }
+
+                    symbolTable.dropDomain();
+                    currentOwner = null;
+
                     return true;
                 }
             }
         }
+
         crtIdx = startIdx;
         return false;
     }
@@ -215,7 +260,7 @@ public class Parser {
 
     private boolean exprMul() {
         if (exprCast()) {
-            while (consume(TokenType.MULTIPLY) || consume(TokenType.DIVIDE)) if (!exprCast()) tkerr("invalid mul");
+            while (consume(TokenType.MULTIPLY) || consume(TokenType.DIVIDE) || consume(TokenType.MODULO)) if (!exprCast()) tkerr("invalid mul");
             return true;
         }
         return false;
@@ -272,7 +317,7 @@ public class Parser {
         // ALL NUMBER TYPES MUST BE HERE
         if (consume(TokenType.BASE10_NUMBER) || consume(TokenType.BASE16_NUMBER) || 
             consume(TokenType.BASE8_NUMBER) || consume(TokenType.BASE2_NUMBER) ||
-            consume(TokenType.REAL_NUMBER) || consume(TokenType.STRING) || consume(TokenType.CHAR)) return true;
+            consume(TokenType.REAL_NUMBER) || consume(TokenType.STRING) || consume(TokenType.CT_CHAR)) return true;
         
         if (consume(TokenType.LPAREN) && expr() && consume(TokenType.RPAREN)) return true;
         crtIdx = startIdx;
@@ -298,7 +343,7 @@ public class Parser {
     }
 
     private boolean typeBase() {
-        if (consume(TokenType.INT) || consume(TokenType.DOUBLE) || consume(TokenType.CHAR)) return true;
+        if (consume(TokenType.INT) || consume(TokenType.DOUBLE) || consume(TokenType.CT_CHAR)) return true;
         
         int startIdx = crtIdx;
         if (consume(TokenType.STRUCT)) {

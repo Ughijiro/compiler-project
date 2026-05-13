@@ -68,15 +68,25 @@ public class Lexer {
             case "for": return new Token(TokenType.FOR, word, tokenLine);
             case "while": return new Token(TokenType.WHILE, word, tokenLine);
             case "break": return new Token(TokenType.BREAK, word, tokenLine);
+            case "continue": return new Token(TokenType.CONTINUE, word, tokenLine);
             case "return": return new Token(TokenType.RETURN, word, tokenLine);
+
             case "int": return new Token(TokenType.INT, word, tokenLine);
             case "double": return new Token(TokenType.DOUBLE, word, tokenLine);
+            case "float": return new Token(TokenType.FLOAT, word, tokenLine);
             case "char": return new Token(TokenType.CHAR, word, tokenLine);
+            case "boolean": return new Token(TokenType.BOOLEAN, word, tokenLine);
             case "void": return new Token(TokenType.VOID, word, tokenLine);
+
             case "struct": return new Token(TokenType.STRUCT, word, tokenLine);
+            case "enum": return new Token(TokenType.ENUM, word, tokenLine);
+            case "switch": return new Token(TokenType.SWITCH, word, tokenLine);
+            case "case": return new Token(TokenType.CASE, word, tokenLine);
+
             case "true":
             case "false":
                 return new Token(TokenType.BOOL_VAL, word, tokenLine);
+
             default:
                 return new Token(TokenType.IDENTIFIER, word, tokenLine);
         }
@@ -94,6 +104,7 @@ public class Lexer {
                 return new Token(TokenType.MINUS, "-", line);
             case '*': return new Token(TokenType.MULTIPLY, "*", line);
             case '/': return new Token(TokenType.DIVIDE, "/", line);
+            case '%': return new Token(TokenType.MODULO, "%", line);
             case '=':
                 if (currentChar() == '=') { idx++; return new Token(TokenType.EQUAL, "==", line); }
                 return new Token(TokenType.ASSIGN, "=", line);
@@ -206,20 +217,81 @@ public class Lexer {
 
                 case COMMENT:
                     if (c == '/') {
-                        while (!isAtEnd() && currentChar() != '\n') idx++;
+                        // single-line comment
+                        while (!isAtEnd() && currentChar() != '\n') {
+                            idx++;
+                        }
+
                         skipSpaces();
-                        if (isAtEnd()) return new Token(TokenType.EOF, "", line);
+
+                        if (isAtEnd()) {
+                            return new Token(TokenType.EOF, "", line);
+                        }
+
                         state = State.START;
                         buf.setLength(0);
-                    } else return new Token(TokenType.DIVIDE, "/", tokenLine);
+                    }
+
+                    else if (c == '*') {
+                        // multi-line comment
+                        idx++;
+
+                        while (!isAtEnd()) {
+
+                            if (currentChar() == '\n') {
+                                line++;
+                            }
+
+                            if (currentChar() == '*' &&
+                                idx + 1 < input.length() &&
+                                input.charAt(idx + 1) == '/') {
+
+                                idx += 2;
+
+                                skipSpaces();
+
+                                if (isAtEnd()) {
+                                    return new Token(TokenType.EOF, "", line);
+                                }
+
+                                state = State.START;
+                                buf.setLength(0);
+                                break;
+                            }
+
+                            idx++;
+                        }
+
+                        if (isAtEnd()) {
+                            return new Token(TokenType.INVALID,
+                                    "Unterminated comment",
+                                    tokenLine);
+                        }
+                    }
+
+                    else {
+                        return new Token(TokenType.DIVIDE, "/", tokenLine);
+                    }
+
                     break;
 
                   case STRING:
+                    if (isAtEnd()) {
+                        return new Token(TokenType.INVALID, "Unterminated string", tokenLine);
+                    }
+
                     if (c == '\\') {
                         idx++;
+                        if (isAtEnd()) {
+                            return new Token(TokenType.INVALID, "Unterminated string escape", tokenLine);
+                        }
                         char next = currentChar();
+
                         if (next == 'n') buf.append('\n');
                         else if (next == 't') buf.append('\t');
+                        else if (next == 'r') buf.append('\r');
+                        else if (next == '"') buf.append('"');
+                        else if (next == '\\') buf.append('\\');
                         else buf.append(next);
                         idx++;
                     }
@@ -228,33 +300,49 @@ public class Lexer {
                         return new Token(TokenType.STRING, buf.toString(), tokenLine);
                     }
                     else {
+                        if (c == '\n') {
+                            return new Token(TokenType.INVALID, "Unterminated string before newline", tokenLine);
+                        }
                         buf.append(c);
-                        if (c == '\n') line++;
                         idx++;
                     }
                     break;
 
                 case CHAR:
+                    if (isAtEnd()) {
+                        return new Token(TokenType.INVALID, "Unterminated char", tokenLine);
+                    }
                     char value;
                     if (c == '\\') {
                         idx++;
+                        if (isAtEnd()) {
+                            return new Token(TokenType.INVALID, "Unterminated char escape", tokenLine);
+                        }
                         char next = currentChar();
+
                         if (next == 'n') value = '\n';
                         else if (next == 't') value = '\t';
+                        else if (next == 'r') value = '\r';
+                        else if (next == '\'') value = '\'';
+                        else if (next == '\\') value = '\\';
                         else value = next;
                         idx++;
                     } else {
+                        if (c == '\n') {
+                            return new Token(TokenType.INVALID, "Unterminated char before newline", tokenLine);
+                        }
+
                         value = c;
                         idx++;
                     }
-
                     if (currentChar() == '\'') {
                         idx++;
-                        return new Token(TokenType.CHAR, String.valueOf(value), tokenLine);
+                        return new Token(TokenType.CT_CHAR, String.valueOf(value), tokenLine);
                     }
-                    return new Token(TokenType.INVALID, "", tokenLine);
-                default:
-                    throw new RuntimeException("Unknown state: " + state);
+
+                    return new Token(TokenType.INVALID, "Invalid char literal", tokenLine);
+                    
+                default: throw new RuntimeException("Unknown state: " + state);
             }
         }
     }
