@@ -1,7 +1,15 @@
 package compiler.parser;
 
-import compiler.lexer.*;
-import compiler.semantic.*;
+import compiler.lexer.Token;
+import compiler.lexer.TokenType;
+import compiler.lexer.Lexer;
+import compiler.semantic.Symbol;
+import compiler.semantic.SymbolTable;
+import compiler.semantic.Type;
+import compiler.semantic.SymbolKind;
+import compiler.semantic.TypeBase;
+import compiler.semantic.MemoryLocation;
+
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -15,6 +23,8 @@ public class Parser {
 
     private SymbolTable symbolTable = new SymbolTable();
     private Symbol currentOwner = null;
+
+    private int loopDepth = 0;
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
@@ -127,38 +137,45 @@ public class Parser {
 
                 String fnName = consumedTk.getValue();
 
+                // Only now we know this is a function, not a variable
+                if (!consume(TokenType.LPAREN)) {
+                    crtIdx = startIdx;
+                    return false;
+                }
+
                 if (symbolTable.findInCurrentDomain(fnName) != null) {
                     semanticError("Symbol redefinition: " + fnName);
                 }
 
                 Symbol fnSymbol = new Symbol(fnName, SymbolKind.SK_FN);
                 fnSymbol.type = returnType;
-
                 symbolTable.addSymbol(fnSymbol);
 
                 Symbol oldOwner = currentOwner;
                 currentOwner = fnSymbol;
 
-                if (consume(TokenType.LPAREN)) {
+                symbolTable.pushDomain();
 
-                    symbolTable.pushDomain();
-
-                    if (fnParam()) {
-                        while (consume(TokenType.COMMA)) {
-                            if (!fnParam()) {
-                                tkerr("Invalid parameter");
-                            }
-                        }
-                    }
-
-                    if (consume(TokenType.RPAREN)) {
-                        if (stmCompound(false)) {
-                            symbolTable.dropDomain();
-                            currentOwner = oldOwner;
-                            return true;
+                if (fnParam()) {
+                    while (consume(TokenType.COMMA)) {
+                        if (!fnParam()) {
+                            tkerr("Invalid parameter");
                         }
                     }
                 }
+
+                if (!consume(TokenType.RPAREN)) {
+                    tkerr("Missing ) after function parameters");
+                }
+
+                if (!stmCompound(false)) {
+                    tkerr("Missing function body");
+                }
+
+                symbolTable.dropDomain();
+                currentOwner = oldOwner;
+
+                return true;
             }
         }
 
@@ -184,6 +201,7 @@ public class Parser {
 
                 Symbol paramSymbol = new Symbol(paramName, SymbolKind.SK_PARAM);
                 paramSymbol.type = paramType;
+                paramSymbol.mem = MemoryLocation.MEM_ARG;
 
                 symbolTable.addSymbol(paramSymbol);
 
@@ -245,7 +263,9 @@ public class Parser {
             if (!consume(TokenType.LPAREN)) tkerr("missing (");
             if (!expr()) tkerr("invalid expression");
             if (!consume(TokenType.RPAREN)) tkerr("missing )");
+            loopDepth++;
             if (!stm()) tkerr("missing statement");
+            loopDepth--;
             return true;
         }
 
@@ -257,7 +277,9 @@ public class Parser {
             if (!consume(TokenType.SEMICOLON)) tkerr("missing ; in for");
             expr(); 
             if (!consume(TokenType.RPAREN)) tkerr("missing )");
+            loopDepth++;
             if (!stm()) tkerr("missing statement");
+            loopDepth--;
             return true;
         }
 
@@ -268,7 +290,15 @@ public class Parser {
         }
 
         if (consume(TokenType.BREAK)) {
-            if (!consume(TokenType.SEMICOLON)) tkerr("missing ;");
+
+            if (loopDepth == 0) {
+                semanticError("break used outside loop");
+            }
+
+            if (!consume(TokenType.SEMICOLON)) {
+                tkerr("missing ;");
+            }
+
             return true;
         }
 
@@ -416,7 +446,6 @@ public class Parser {
         Type varType = new Type(null);
 
         if (typeBase(varType)) {
-
             if (consume(TokenType.IDENTIFIER)) {
 
                 String varName = consumedTk.getValue();
@@ -430,47 +459,29 @@ public class Parser {
                 Symbol varSymbol = new Symbol(varName, SymbolKind.SK_VAR);
                 varSymbol.type = varType;
 
+                if (symbolTable.currentDepth == 0) {
+                    varSymbol.mem = MemoryLocation.MEM_GLOBAL;
+                } else {
+                    varSymbol.mem = MemoryLocation.MEM_LOCAL;
+                }
+
+                if (currentOwner != null &&
+                    currentOwner.kind == SymbolKind.SK_FN) {
+                    currentOwner.fnLocals.add(varSymbol);
+                }
+
                 if (currentOwner != null &&
                     currentOwner.kind == SymbolKind.SK_STRUCT) {
-
                     currentOwner.structMembers.add(varSymbol);
                 }
 
                 symbolTable.addSymbol(varSymbol);
 
-                while (consume(TokenType.COMMA)) {
-
-                    if (!consume(TokenType.IDENTIFIER)) {
-                        tkerr("Expected identifier");
-                    }
-
-                    String extraName = consumedTk.getValue();
-
-                    Type extraType = new Type(varType.typeBase);
-                    extraType.structSymbol = varType.structSymbol;
-                    extraType.nElements = varType.nElements;
-
-                    arrayDecl(extraType);
-
-                    if (symbolTable.findInCurrentDomain(extraName) != null) {
-                        semanticError("Symbol redefinition: " + extraName);
-                    }
-
-                    Symbol extraVar = new Symbol(extraName, SymbolKind.SK_VAR);
-                    extraVar.type = extraType;
-
-                    if (currentOwner != null &&
-                        currentOwner.kind == SymbolKind.SK_STRUCT) {
-
-                        currentOwner.structMembers.add(extraVar);
-                    }
-
-                    symbolTable.addSymbol(extraVar);
-                }
-
                 if (consume(TokenType.SEMICOLON)) {
                     return true;
                 }
+
+                tkerr("Missing ; after variable declaration");
             }
         }
 
@@ -526,10 +537,10 @@ public class Parser {
 
         if (consume(TokenType.LBRACK)) {
 
-            if (expr()) {
-                type.nElements = 0; // array with expression size
+            if (consume(TokenType.BASE10_NUMBER)) {
+                type.nElements = 1; // array with specified size
             } else {
-                type.nElements = 0; // int v[]
+                type.nElements = 0; // array without specified size: []
             }
 
             if (consume(TokenType.RBRACK)) {
@@ -546,7 +557,7 @@ public class Parser {
     public static void main(String[] args) {
         try {
             // Path to your .c file
-            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\lexer\\testers\\9.c";
+            String path = "C:\\Users\\tamas\\Desktop\\CT_PROIECT\\src\\compiler\\parser\\testers\\test7.c";
             String input = Files.readString(Paths.get(path));
 
             // 1. Get tokens from Lexer
@@ -563,6 +574,7 @@ public class Parser {
             if (parser.unit()) {
                 System.out.println("--- SUCCESS ---");
                 System.out.println("Syntax is CORRECT! 🎉");
+                parser.symbolTable.printSymbols();
             }
 
         } catch (Exception e) {

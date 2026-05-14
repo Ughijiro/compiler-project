@@ -49,4 +49,18 @@ public class SymbolTable {
         }
         return null;
     }
+
+    public void printSymbols() {
+        System.out.println("=== SYMBOL TABLE ===");
+
+        for (Symbol s : symbols) {
+            System.out.println(
+                "name=" + s.name +
+                ", kind=" + s.kind +
+                ", mem=" + s.mem +
+                ", type=" + s.type +
+                ", depth=" + s.depth
+            );
+        }
+    }
 }
