@@ -3,6 +3,13 @@ package compiler.lexer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+/*
+    This lexer splits the input text into lexical tokens.
+    a lexical token is an indivisible unit of information for the next phases.
+    
+*/
+
+
 public class Lexer {
 
     private String input;

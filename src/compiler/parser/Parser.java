@@ -302,6 +302,19 @@ public class Parser {
             return true;
         }
 
+        if (consume(TokenType.CONTINUE)) {
+
+        if (loopDepth == 0) {
+            semanticError("continue used outside loop");
+        }
+
+        if (!consume(TokenType.SEMICOLON)) {
+            tkerr("missing ;");
+        }
+
+        return true;
+    }
+
         if (expr()) {
             if (!consume(TokenType.SEMICOLON)) tkerr("missing ; after expression");
             return true;
@@ -420,6 +433,14 @@ public class Parser {
     private boolean exprPrimary() {
         int startIdx = crtIdx;
         if (consume(TokenType.IDENTIFIER)) {
+            String name = consumedTk.getValue();
+
+            Symbol s = symbolTable.findSymbol(name);
+
+            if (s == null) {
+                semanticError("Undefined symbol: " + name);
+            }
+            
             if (consume(TokenType.LPAREN)) {
                 if (expr()) {
                     while (consume(TokenType.COMMA)) if (!expr()) tkerr("invalid arg");
@@ -465,13 +486,11 @@ public class Parser {
                     varSymbol.mem = MemoryLocation.MEM_LOCAL;
                 }
 
-                if (currentOwner != null &&
-                    currentOwner.kind == SymbolKind.SK_FN) {
+                if (currentOwner != null && currentOwner.kind == SymbolKind.SK_FN) {
                     currentOwner.fnLocals.add(varSymbol);
                 }
 
-                if (currentOwner != null &&
-                    currentOwner.kind == SymbolKind.SK_STRUCT) {
+                if (currentOwner != null && currentOwner.kind == SymbolKind.SK_STRUCT) {
                     currentOwner.structMembers.add(varSymbol);
                 }
 
