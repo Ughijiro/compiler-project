@@ -3,13 +3,6 @@ package compiler.lexer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
-/*
-    This lexer splits the input text into lexical tokens.
-    a lexical token is an indivisible unit of information for the next phases.
-    
-*/
-
-
 public class Lexer {
 
     private String input;
@@ -34,10 +27,7 @@ public class Lexer {
         STRING,
         CHAR,
 
-        COMMENT,
-
-        NOT,
-        ASSIGN
+        COMMENT
     }
 
     public Lexer(String input) {
@@ -51,6 +41,12 @@ public class Lexer {
     private char currentChar() {
         if (isAtEnd()) return '\0';
         return input.charAt(idx);
+    }
+
+    private boolean isHexDigit(char c) {
+        return Character.isDigit(c)
+                || (c >= 'a' && c <= 'f')
+                || (c >= 'A' && c <= 'F');
     }
 
     private void skipSpaces() {
@@ -99,53 +95,91 @@ public class Lexer {
         }
     }
 
-    private Token makeOperator(char c, int line) {
+    private Token makeOperator(char c, int tokenLine) {
         idx++;
 
         switch (c) {
             case '+':
-                if (currentChar() == '+') { idx++; return new Token(TokenType.PLUS, "++", line); }
-                return new Token(TokenType.PLUS, "+", line);
+                if (currentChar() == '+') {
+                    idx++;
+                    return new Token(TokenType.PLUS, "++", tokenLine);
+                }
+                return new Token(TokenType.PLUS, "+", tokenLine);
+
             case '-':
-                if (currentChar() == '-') { idx++; return new Token(TokenType.MINUS, "--", line); }
-                return new Token(TokenType.MINUS, "-", line);
-            case '*': return new Token(TokenType.MULTIPLY, "*", line);
-            case '/': return new Token(TokenType.DIVIDE, "/", line);
-            case '%': return new Token(TokenType.MODULO, "%", line);
+                if (currentChar() == '-') {
+                    idx++;
+                    return new Token(TokenType.MINUS, "--", tokenLine);
+                }
+                return new Token(TokenType.MINUS, "-", tokenLine);
+
+            case '*': return new Token(TokenType.MULTIPLY, "*", tokenLine);
+            case '/': return new Token(TokenType.DIVIDE, "/", tokenLine);
+            case '%': return new Token(TokenType.MODULO, "%", tokenLine);
+
             case '=':
-                if (currentChar() == '=') { idx++; return new Token(TokenType.EQUAL, "==", line); }
-                return new Token(TokenType.ASSIGN, "=", line);
+                if (currentChar() == '=') {
+                    idx++;
+                    return new Token(TokenType.EQUAL, "==", tokenLine);
+                }
+                return new Token(TokenType.ASSIGN, "=", tokenLine);
+
             case '!':
-                if (currentChar() == '=') { idx++; return new Token(TokenType.NOT_EQUAL, "!=", line); }
-                return new Token(TokenType.NOT, "!", line);
+                if (currentChar() == '=') {
+                    idx++;
+                    return new Token(TokenType.NOT_EQUAL, "!=", tokenLine);
+                }
+                return new Token(TokenType.NOT, "!", tokenLine);
+
             case '<':
-                if (currentChar() == '=') { idx++; return new Token(TokenType.LESS_EQUAL, "<=", line); }
-                return new Token(TokenType.LESS, "<", line);
+                if (currentChar() == '=') {
+                    idx++;
+                    return new Token(TokenType.LESS_EQUAL, "<=", tokenLine);
+                }
+                return new Token(TokenType.LESS, "<", tokenLine);
+
             case '>':
-                if (currentChar() == '=') { idx++; return new Token(TokenType.GREATER_EQUAL, ">=", line); }
-                return new Token(TokenType.GREATER, ">", line);
+                if (currentChar() == '=') {
+                    idx++;
+                    return new Token(TokenType.GREATER_EQUAL, ">=", tokenLine);
+                }
+                return new Token(TokenType.GREATER, ">", tokenLine);
+
             case '&':
-                if (currentChar() == '&') { idx++; return new Token(TokenType.AND, "&&", line); }
-                return new Token(TokenType.BIT_AND, "&", line);
+                if (currentChar() == '&') {
+                    idx++;
+                    return new Token(TokenType.AND, "&&", tokenLine);
+                }
+                return new Token(TokenType.BIT_AND, "&", tokenLine);
+
             case '|':
-                if (currentChar() == '|') { idx++; return new Token(TokenType.OR, "||", line); }
-                return new Token(TokenType.BIT_OR, "|", line);
-            case '.': return new Token(TokenType.DOT, ".", line);
-            case ';': return new Token(TokenType.SEMICOLON, ";", line);
-            case ',': return new Token(TokenType.COMMA, ",", line);
-            case '(': return new Token(TokenType.LPAREN, "(", line);
-            case ')': return new Token(TokenType.RPAREN, ")", line);
-            case '[': return new Token(TokenType.LBRACK, "[", line);
-            case ']': return new Token(TokenType.RBRACK, "]", line);
-            case '{': return new Token(TokenType.LBRACE, "{", line);
-            case '}': return new Token(TokenType.RBRACE, "}", line);
-            default: return new Token(TokenType.INVALID, String.valueOf(c), line);
+                if (currentChar() == '|') {
+                    idx++;
+                    return new Token(TokenType.OR, "||", tokenLine);
+                }
+                return new Token(TokenType.BIT_OR, "|", tokenLine);
+
+            case '.': return new Token(TokenType.DOT, ".", tokenLine);
+            case ';': return new Token(TokenType.SEMICOLON, ";", tokenLine);
+            case ',': return new Token(TokenType.COMMA, ",", tokenLine);
+            case '(': return new Token(TokenType.LPAREN, "(", tokenLine);
+            case ')': return new Token(TokenType.RPAREN, ")", tokenLine);
+            case '[': return new Token(TokenType.LBRACK, "[", tokenLine);
+            case ']': return new Token(TokenType.RBRACK, "]", tokenLine);
+            case '{': return new Token(TokenType.LBRACE, "{", tokenLine);
+            case '}': return new Token(TokenType.RBRACE, "}", tokenLine);
+
+            default:
+                return new Token(TokenType.INVALID, String.valueOf(c), tokenLine);
         }
     }
 
     public Token getNextToken() {
         skipSpaces();
-        if (isAtEnd()) return new Token(TokenType.EOF, "", line);
+
+        if (isAtEnd()) {
+            return new Token(TokenType.EOF, "", line);
+        }
 
         State state = State.START;
         StringBuilder buf = new StringBuilder();
@@ -153,145 +187,261 @@ public class Lexer {
 
         while (true) {
             char c = currentChar();
+
             switch (state) {
+
                 case START:
-                    if (Character.isLetter(c) || c == '_') { state = State.IDENTIFIER; buf.append(c); idx++; }
-                    else if (c == '0') { state = State.ZERO; buf.append(c); idx++; }
-                    else if (c >= '1' && c <= '9') { state = State.BASE10; buf.append(c); idx++; }
-                    else if (c == '"') { state = State.STRING; idx++; }
-                    else if (c == '\'') { state = State.CHAR; idx++; }
-                    else if (c == '/') { state = State.COMMENT; idx++; }
-                    else return makeOperator(c, tokenLine);
+                    if (Character.isLetter(c) || c == '_') {
+                        state = State.IDENTIFIER;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == '0') {
+                        state = State.ZERO;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c >= '1' && c <= '9') {
+                        state = State.BASE10;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == '"') {
+                        state = State.STRING;
+                        idx++;
+                    }
+                    else if (c == '\'') {
+                        state = State.CHAR;
+                        idx++;
+                    }
+                    else if (c == '/') {
+                        state = State.COMMENT;
+                        idx++;
+                    }
+                    else {
+                        return makeOperator(c, tokenLine);
+                    }
                     break;
 
                 case IDENTIFIER:
-                    if (Character.isLetterOrDigit(c) || c == '_') { buf.append(c); idx++; }
-                    else return checkIfKeyword(buf.toString(), tokenLine);
+                    if (Character.isLetterOrDigit(c) || c == '_') {
+                        buf.append(c);
+                        idx++;
+                    } else {
+                        return checkIfKeyword(buf.toString(), tokenLine);
+                    }
                     break;
 
                 case ZERO:
-                    if (c == 'x' || c == 'X') { state = State.BASE16; buf.append(c); idx++; }
-                    else if (c == 'b' || c == 'B') { state = State.BASE2; buf.append(c); idx++; }
-                    else if (c >= '0' && c <= '7') { state = State.BASE8; buf.append(c); idx++; }
-                    else if (c == '.') { state = State.FRAC; buf.append('.'); idx++; }
-                    else if (c == 'e' || c == 'E') { state = State.EXP; buf.append(c); idx++; }
-                    else return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
+                    if (c == 'x' || c == 'X') {
+                        state = State.BASE16;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == 'b' || c == 'B') {
+                        state = State.BASE2;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c >= '0' && c <= '7') {
+                        state = State.BASE8;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == '8' || c == '9') {
+                        buf.append(c);
+                        idx++;
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
+                    else if (c == '.') {
+                        state = State.FRAC;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == 'e' || c == 'E') {
+                        state = State.EXP;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else {
+                        return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
+                    }
                     break;
 
                 case BASE10:
-                    if (Character.isDigit(c)) { buf.append(c); idx++; }
-                    else if (c == '.') { state = State.FRAC; buf.append('.'); idx++; }
-                    else if (c == 'e' || c == 'E') { state = State.EXP; buf.append(c); idx++; }
-                    else return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
+                    if (Character.isDigit(c)) {
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == '.') {
+                        state = State.FRAC;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == 'e' || c == 'E') {
+                        state = State.EXP;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else {
+                        return new Token(TokenType.BASE10_NUMBER, buf.toString(), tokenLine);
+                    }
+                    break;
+
+                case BASE8:
+                    if (c >= '0' && c <= '7') {
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == '8' || c == '9') {
+                        buf.append(c);
+                        idx++;
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
+                    else {
+                        return new Token(TokenType.BASE8_NUMBER, buf.toString(), tokenLine);
+                    }
                     break;
 
                 case BASE16:
-                    if (Character.isDigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) { buf.append(c); idx++; }
-                    else return new Token(TokenType.BASE16_NUMBER, buf.toString(), tokenLine);
-                    break;
-                
-                case BASE8:
-                    if (c >= '0' && c <= '7') { buf.append(c); idx++; }
-                    else return new Token(TokenType.BASE8_NUMBER, buf.toString(), tokenLine);
+                    if (buf.length() == 2 && !isHexDigit(c)) {
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
+
+                    if (isHexDigit(c)) {
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (Character.isLetterOrDigit(c)) {
+                        buf.append(c);
+                        idx++;
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
+                    else {
+                        return new Token(TokenType.BASE16_NUMBER, buf.toString(), tokenLine);
+                    }
                     break;
 
                 case BASE2:
-                    if (c == '0' || c == '1') { buf.append(c); idx++; }
-                    else return new Token(TokenType.BASE2_NUMBER, buf.toString(), tokenLine);
+                    if (buf.length() == 2 && c != '0' && c != '1') {
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
+
+                    if (c == '0' || c == '1') {
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (Character.isDigit(c)) {
+                        buf.append(c);
+                        idx++;
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
+                    else {
+                        return new Token(TokenType.BASE2_NUMBER, buf.toString(), tokenLine);
+                    }
                     break;
 
                 case FRAC:
-                    if (Character.isDigit(c)) { buf.append(c); idx++; }
-                    else if (c == 'e' || c == 'E') { state = State.EXP; buf.append(c); idx++; }
-                    else return new Token(TokenType.REAL_NUMBER, buf.toString(), tokenLine);
+                    if (buf.charAt(buf.length() - 1) == '.' && !Character.isDigit(c)) {
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
+
+                    if (Character.isDigit(c)) {
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (c == 'e' || c == 'E') {
+                        state = State.EXP;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else {
+                        return new Token(TokenType.REAL_NUMBER, buf.toString(), tokenLine);
+                    }
                     break;
 
                 case EXP:
-                    if (c == '+' || c == '-') { state = State.SIGN; buf.append(c); idx++; }
-                    else if (Character.isDigit(c)) { state = State.POWER; buf.append(c); idx++; }
-                    else return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    if (c == '+' || c == '-') {
+                        state = State.SIGN;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else if (Character.isDigit(c)) {
+                        state = State.POWER;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else {
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
                     break;
 
                 case SIGN:
-                    if (Character.isDigit(c)) { state = State.POWER; buf.append(c); idx++; }
-                    else return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    if (Character.isDigit(c)) {
+                        state = State.POWER;
+                        buf.append(c);
+                        idx++;
+                    }
+                    else {
+                        return new Token(TokenType.INVALID, buf.toString(), tokenLine);
+                    }
                     break;
 
                 case POWER:
-                    if (Character.isDigit(c)) { buf.append(c); idx++; }
-                    else return new Token(TokenType.REAL_NUMBER, buf.toString(), tokenLine);
+                    if (Character.isDigit(c)) {
+                        buf.append(c);
+                        idx++;
+                    }
+                    else {
+                        return new Token(TokenType.REAL_NUMBER, buf.toString(), tokenLine);
+                    }
                     break;
 
                 case COMMENT:
                     if (c == '/') {
-                        // single-line comment
                         while (!isAtEnd() && currentChar() != '\n') {
                             idx++;
                         }
-
-                        skipSpaces();
-
-                        if (isAtEnd()) {
-                            return new Token(TokenType.EOF, "", line);
-                        }
-
-                        state = State.START;
-                        buf.setLength(0);
+                        return getNextToken();
                     }
-
                     else if (c == '*') {
-                        // multi-line comment
                         idx++;
 
                         while (!isAtEnd()) {
-
                             if (currentChar() == '\n') {
                                 line++;
+                                idx++;
+                                continue;
                             }
 
-                            if (currentChar() == '*' &&
-                                idx + 1 < input.length() &&
-                                input.charAt(idx + 1) == '/') {
-
+                            if (currentChar() == '*'
+                                    && idx + 1 < input.length()
+                                    && input.charAt(idx + 1) == '/') {
                                 idx += 2;
-
-                                skipSpaces();
-
-                                if (isAtEnd()) {
-                                    return new Token(TokenType.EOF, "", line);
-                                }
-
-                                state = State.START;
-                                buf.setLength(0);
-                                break;
+                                return getNextToken();
                             }
 
                             idx++;
                         }
 
-                        if (isAtEnd()) {
-                            return new Token(TokenType.INVALID,
-                                    "Unterminated comment",
-                                    tokenLine);
-                        }
+                        return new Token(TokenType.INVALID, "Unterminated comment", tokenLine);
                     }
-
                     else {
                         return new Token(TokenType.DIVIDE, "/", tokenLine);
                     }
 
-                    break;
-
-                  case STRING:
+                case STRING:
                     if (isAtEnd()) {
                         return new Token(TokenType.INVALID, "Unterminated string", tokenLine);
                     }
 
                     if (c == '\\') {
                         idx++;
+
                         if (isAtEnd()) {
                             return new Token(TokenType.INVALID, "Unterminated string escape", tokenLine);
                         }
+
                         char next = currentChar();
 
                         if (next == 'n') buf.append('\n');
@@ -300,6 +450,7 @@ public class Lexer {
                         else if (next == '"') buf.append('"');
                         else if (next == '\\') buf.append('\\');
                         else buf.append(next);
+
                         idx++;
                     }
                     else if (c == '"') {
@@ -310,6 +461,7 @@ public class Lexer {
                         if (c == '\n') {
                             return new Token(TokenType.INVALID, "Unterminated string before newline", tokenLine);
                         }
+
                         buf.append(c);
                         idx++;
                     }
@@ -319,12 +471,16 @@ public class Lexer {
                     if (isAtEnd()) {
                         return new Token(TokenType.INVALID, "Unterminated char", tokenLine);
                     }
+
                     char value;
+
                     if (c == '\\') {
                         idx++;
+
                         if (isAtEnd()) {
                             return new Token(TokenType.INVALID, "Unterminated char escape", tokenLine);
                         }
+
                         char next = currentChar();
 
                         if (next == 'n') value = '\n';
@@ -333,8 +489,10 @@ public class Lexer {
                         else if (next == '\'') value = '\'';
                         else if (next == '\\') value = '\\';
                         else value = next;
+
                         idx++;
-                    } else {
+                    }
+                    else {
                         if (c == '\n') {
                             return new Token(TokenType.INVALID, "Unterminated char before newline", tokenLine);
                         }
@@ -342,14 +500,16 @@ public class Lexer {
                         value = c;
                         idx++;
                     }
+
                     if (currentChar() == '\'') {
                         idx++;
                         return new Token(TokenType.CT_CHAR, String.valueOf(value), tokenLine);
                     }
 
                     return new Token(TokenType.INVALID, "Invalid char literal", tokenLine);
-                    
-                default: throw new RuntimeException("Unknown state: " + state);
+
+                default:
+                    throw new RuntimeException("Unknown state: " + state);
             }
         }
     }
