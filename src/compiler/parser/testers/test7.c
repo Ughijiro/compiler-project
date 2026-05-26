@@ -1,3 +1,5 @@
-int jh() {
-    k = 5;
-}
+struct A {
+    int x;
+};
+
+struct A a;

@@ -2,6 +2,7 @@ package compiler.parser;
 
 import compiler.lexer.Token;
 import compiler.lexer.TokenType;
+import compiler.semantic.*;
 
 import java.util.List;
 
@@ -9,6 +10,8 @@ public class Parser {
 
     private List<Token> tokens;
     private int crtIdx = 0;
+
+    private SymbolTable symbolTable = new SymbolTable();
 
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
@@ -38,6 +41,10 @@ public class Parser {
         );
     }
 
+    private Type voidType() {
+        return new Type(TypeBase.TB_VOID);
+    }
+
     // unit: ( structDef | fnDef | varDef )*EOF
     public boolean unit() {
         while (!consume(TokenType.EOF)) {
@@ -63,21 +70,44 @@ public class Parser {
         int startIdx = crtIdx;
 
         if (consume(TokenType.STRUCT)) {
+            Token tkName = crtTk();
+
             if (consume(TokenType.IDENTIFIER)) {
-                if (consume(TokenType.LBRACE)) {
-
-                    while (varDef());
-
-                    if (!consume(TokenType.RBRACE)) {
-                        tkerr("Missing } after struct body");
-                    }
-
-                    if (!consume(TokenType.SEMICOLON)) {
-                        tkerr("Missing ; after struct definition");
-                    }
-
-                    return true;
+                if (!consume(TokenType.LBRACE)) {
+                    crtIdx = startIdx;
+                    return false;
                 }
+
+                if (symbolTable.findInCurrentDomain(tkName.getValue()) != null) {
+                    tkerr("Symbol redefinition: " + tkName.getValue());
+                }
+
+                Symbol structSymbol = new Symbol(tkName.getValue(), SymbolKind.SK_STRUCT);
+                structSymbol.type = new Type(TypeBase.TB_STRUCT);
+                structSymbol.type.structSymbol = structSymbol;
+                structSymbol.mem = null;
+
+                symbolTable.addSymbol(structSymbol);
+
+                Symbol oldOwner = symbolTable.currentOwner;
+                symbolTable.currentOwner = structSymbol;
+
+                symbolTable.pushDomain();
+
+                while (varDef());
+
+                symbolTable.dropDomain();
+                symbolTable.currentOwner = oldOwner;
+
+                if (!consume(TokenType.RBRACE)) {
+                    tkerr("Missing } after struct body");
+                }
+
+                if (!consume(TokenType.SEMICOLON)) {
+                    tkerr("Missing ; after struct definition");
+                }
+
+                return true;
             }
         }
 
@@ -88,10 +118,23 @@ public class Parser {
     // fnDef: ( typeBase | VOID ) ID LPAREN ( fnParam ( COMMA fnParam )* )? RPAREN stmCompound
     private boolean fnDef() {
         int startIdx = crtIdx;
-
-        if (typeBase() || consume(TokenType.VOID)) {
+        Type type = new Type(null);
+        if (typeBase(type) || (consume(TokenType.VOID) && ((type = voidType()) != null))) {
+            Token tkName = crtTk();
             if (consume(TokenType.IDENTIFIER)) {
                 if (consume(TokenType.LPAREN)) {
+                    if (symbolTable.findInCurrentDomain(tkName.getValue()) != null) {
+                        tkerr("Symbol redefinition: " + tkName.getValue());
+                    }
+
+                    Symbol fnSymbol = new Symbol(tkName.getValue(), SymbolKind.SK_FN);
+                    fnSymbol.type = type;
+                    fnSymbol.mem = MemoryLocation.MEM_GLOBAL;
+                    symbolTable.addSymbol(fnSymbol);
+
+                    Symbol oldOwner = symbolTable.currentOwner;
+                    symbolTable.currentOwner = fnSymbol;
+                    symbolTable.pushDomain();
 
                     if (fnParam()) {
                         while (consume(TokenType.COMMA)) {
@@ -109,6 +152,8 @@ public class Parser {
                         tkerr("Missing function body");
                     }
 
+                    symbolTable.dropDomain();
+                    symbolTable.currentOwner = oldOwner;
                     return true;
                 }
             }
@@ -122,9 +167,27 @@ public class Parser {
     private boolean fnParam() {
         int startIdx = crtIdx;
 
-        if (typeBase()) {
+        Type type = new Type(null);
+        if (typeBase(type)) {
             if (consume(TokenType.IDENTIFIER)) {
-                arrayDecl();
+                Token tk = tokens.get(crtIdx - 1);
+
+                if (symbolTable.findInCurrentDomain(tk.getValue()) != null) {
+                    tkerr("Redefinition of parameter: " + tk.getValue());
+                }
+
+                arrayDecl(type);
+
+                Symbol param = new Symbol(tk.getValue(), SymbolKind.SK_PARAM);
+                param.type = type;
+                param.mem = MemoryLocation.MEM_ARG;
+
+                if (symbolTable.currentOwner != null &&
+                    symbolTable.currentOwner.kind == SymbolKind.SK_FN) {
+                    symbolTable.currentOwner.fnParams.add(param);
+                }
+
+                symbolTable.addSymbol(param);
                 return true;
             }
         }
@@ -137,9 +200,42 @@ public class Parser {
     private boolean varDef() {
         int startIdx = crtIdx;
 
-        if (typeBase()) {
+        Type type = new Type(null);
+        if (typeBase(type)) {
             if (consume(TokenType.IDENTIFIER)) {
-                arrayDecl();
+                
+                Token tk = tokens.get(crtIdx - 1);
+                Symbol s = symbolTable.findInCurrentDomain(tk.getValue());
+                if (s != null) {
+                    tkerr("Redefinition of symbol: " + tk.getValue());
+                }
+                
+                Symbol var = new Symbol(tk.getValue(), SymbolKind.SK_VAR);
+                var.type = type;
+
+                if(symbolTable.currentOwner != null &&
+                   symbolTable.currentOwner.kind == SymbolKind.SK_STRUCT){
+                    var.mem = null;
+                }
+                else if(symbolTable.currentDepth == 0){
+                    var.mem = MemoryLocation.MEM_GLOBAL;
+                }
+                else{
+                    var.mem = MemoryLocation.MEM_LOCAL;
+                }
+
+                if(symbolTable.currentOwner != null){
+                    if(symbolTable.currentOwner.kind == SymbolKind.SK_FN){
+                        symbolTable.currentOwner.fnLocals.add(var);
+                    }
+
+                    if(symbolTable.currentOwner.kind == SymbolKind.SK_STRUCT){
+                        symbolTable.currentOwner.structMembers.add(var);
+                    }
+                }
+                
+                arrayDecl(type);
+                symbolTable.addSymbol(var);
 
                 if (consume(TokenType.SEMICOLON)) {
                     return true;
@@ -154,15 +250,33 @@ public class Parser {
     }
 
     // typeBase: INT | DOUBLE | CHAR | STRUCT ID
-    private boolean typeBase() {
-        if (consume(TokenType.INT)) return true;
-        if (consume(TokenType.DOUBLE)) return true;
-        if (consume(TokenType.CHAR)) return true;
+    private boolean typeBase(Type type) {
+        if (consume(TokenType.INT)){
+            type.typeBase = TypeBase.TB_INT;
+            return true;
+        };
+        if (consume(TokenType.DOUBLE)) {
+            type.typeBase = TypeBase.TB_DOUBLE;
+            return true;
+        }
+        if (consume(TokenType.CHAR)) {
+            type.typeBase = TypeBase.TB_CHAR;
+            return true;
+        }
 
         int startIdx = crtIdx;
 
         if (consume(TokenType.STRUCT)) {
+            Token tk = crtTk();
             if (consume(TokenType.IDENTIFIER)) {
+
+                Symbol s = symbolTable.findSymbol(tk.getValue());
+                if (s == null || s.kind != SymbolKind.SK_STRUCT) {
+                    tkerr("Undefined struct type: " + tk.getValue());
+                }
+
+                type.typeBase = TypeBase.TB_STRUCT;
+                type.structSymbol = s;
                 return true;
             }
         }
@@ -173,13 +287,34 @@ public class Parser {
 
     // arrayDecl: LBRACK CT_INT? RBRACK
     private boolean arrayDecl() {
+        return arrayDecl(null);
+    }
+
+    private boolean arrayDecl(Type type) {
         int startIdx = crtIdx;
 
         if (consume(TokenType.LBRACK)) {
+            int nElements = 0;
 
-            //consume(TokenType.BASE10_NUMBER);
-            expr();
+            if (crtTk().getTokenType() != TokenType.RBRACK) {
+                Token sizeToken = crtTk();
+                if (!expr()) {
+                    tkerr("Invalid array size expression");
+                }
+
+                if (sizeToken.getTokenType() == TokenType.BASE10_NUMBER) {
+                    try {
+                        nElements = Integer.parseInt(sizeToken.getValue());
+                    } catch (NumberFormatException e) {
+                        nElements = 0;
+                    }
+                }
+            }
+
             if (consume(TokenType.RBRACK)) {
+                if (type != null) {
+                    type.nElements = nElements;
+                }
                 return true;
             }
 
@@ -195,10 +330,12 @@ public class Parser {
         int startIdx = crtIdx;
 
         if (consume(TokenType.LBRACE)) {
+            symbolTable.pushDomain();
 
             while (varDef() || stm());
 
             if (consume(TokenType.RBRACE)) {
+                symbolTable.dropDomain();
                 return true;
             }
 
@@ -420,9 +557,9 @@ public class Parser {
     // exprCast: LPAREN typeBase arrayDecl? RPAREN exprCast | exprUnary
     private boolean exprCast() {
         int startIdx = crtIdx;
-
+        Type type = new Type(null);
         if (consume(TokenType.LPAREN)) {
-            if (typeBase()) {
+            if (typeBase(type)) {
                 arrayDecl();
 
                 if (consume(TokenType.RPAREN)) {
@@ -547,7 +684,7 @@ public class Parser {
 
         try {
 
-            String path = "src/compiler/lexer/testers/9.c";
+            String path = "src/compiler/parser/testers/test7.c";
 
             String input = java.nio.file.Files.readString(
                     java.nio.file.Paths.get(path)
