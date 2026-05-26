@@ -1,5 +1,5 @@
-struct A {
-    int x;
-};
+int x;
 
-struct A a;
+int main(){
+    x();
+}

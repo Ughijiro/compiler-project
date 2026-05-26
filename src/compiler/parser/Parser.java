@@ -635,8 +635,19 @@ public class Parser {
         int startIdx = crtIdx;
 
         if (consume(TokenType.IDENTIFIER)) {
+            Token tk = tokens.get(crtIdx - 1);
+
+            Symbol s = symbolTable.findSymbol(tk.getValue());
+            
+            if(s == null){
+                tkerr("Undefined symbol: " + tk.getValue());
+            }
 
             if (consume(TokenType.LPAREN)) {
+
+                if (s.kind != SymbolKind.SK_FN) {
+                    tkerr("Symbol is not a function: " + tk.getValue());
+                }
                 if (expr()) {
                     while (consume(TokenType.COMMA)) {
                         if (!expr()) {
