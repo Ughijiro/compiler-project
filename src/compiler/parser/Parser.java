@@ -70,7 +70,7 @@ public class Parser {
         int startIdx = crtIdx;
 
         if (consume(TokenType.STRUCT)) {
-            Token tkName = crtTk();
+            Token tk = crtTk();
 
             if (consume(TokenType.IDENTIFIER)) {
                 if (!consume(TokenType.LBRACE)) {
@@ -78,11 +78,11 @@ public class Parser {
                     return false;
                 }
 
-                if (symbolTable.findInCurrentDomain(tkName.getValue()) != null) {
-                    tkerr("Symbol redefinition: " + tkName.getValue());
+                if (symbolTable.findInCurrentDomain(tk.getValue()) != null) {
+                    tkerr("Symbol redefinition: " + tk.getValue());
                 }
 
-                Symbol structSymbol = new Symbol(tkName.getValue(), SymbolKind.SK_STRUCT);
+                Symbol structSymbol = new Symbol(tk.getValue(), SymbolKind.SK_STRUCT);
                 structSymbol.type = new Type(TypeBase.TB_STRUCT);
                 structSymbol.type.structSymbol = structSymbol;
                 structSymbol.mem = null;
@@ -668,7 +668,7 @@ public class Parser {
                         argCount++;
                     }
                 }
-                
+
                 if(argCount != s.fnParams.size()){
                     tkerr("Invalid number of arguments in call to " + tk.getValue());
                 }
@@ -712,7 +712,7 @@ public class Parser {
 
         try {
 
-            String path = "src/compiler/parser/testers/test7.c";
+            String path = "src/compiler/lexer/testers/0.c";
 
             String input = java.nio.file.Files.readString(
                     java.nio.file.Paths.get(path)
@@ -747,6 +747,10 @@ public class Parser {
             if (parser.unit()) {
                 System.out.println("Syntax is CORRECT!");
             }
+
+            // SymbolTable
+
+            parser.symbolTable.printSymbols();
 
         } catch (Exception e) {
 

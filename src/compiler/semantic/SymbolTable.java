@@ -51,16 +51,32 @@ public class SymbolTable {
     }
 
     public void printSymbols() {
-        System.out.println("=== SYMBOL TABLE ===");
+
+        System.out.println("\n================ SYMBOL TABLE ================\n");
+
+        System.out.printf(
+            "| %-10s | %-10s | %-25s | %-12s | %-5s |\n",
+            "Name", "Kind", "Type", "Memory", "Depth"
+        );
+
+        System.out.println(
+            "|------------|------------|---------------------------|--------------|-------|"
+        );
 
         for (Symbol s : symbols) {
-            System.out.println(
-                "name=" + s.name +
-                ", kind=" + s.kind +
-                ", mem=" + s.mem +
-                ", type=" + s.type +
-                ", depth=" + s.depth
+
+            System.out.printf(
+                "| %-10s | %-10s | %-25s | %-12s | %-5d |\n",
+                s.name,
+                s.kind,
+                s.type,
+                s.mem != null ? s.mem : "-",
+                s.depth
             );
         }
+
+        System.out.println(
+            "\n======================================================\n"
+        );
     }
 }
