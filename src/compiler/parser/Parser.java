@@ -751,6 +751,8 @@ public class Parser {
             // SymbolTable
 
             parser.symbolTable.printSymbols();
+            System.out.println(
+            parser.symbolTable.currentOwner.fnParams);
 
         } catch (Exception e) {
 
