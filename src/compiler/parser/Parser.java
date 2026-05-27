@@ -446,32 +446,64 @@ public class Parser {
 
     // expr: exprAssign
     private boolean expr() {
-        return exprAssign();
+        RetVal rv = new RetVal();
+        return expr(rv);
+    }
+
+    private boolean expr(RetVal rv) {
+        return exprAssign(rv);
     }
 
     // exprAssign: exprUnary ASSIGN exprAssign | exprOr
     private boolean exprAssign() {
+    RetVal rv = new RetVal();
+    return exprAssign(rv);
+}
+
+    private boolean exprAssign(RetVal rv) {
         int startIdx = crtIdx;
 
-        if (exprUnary()) {
+        RetVal left = new RetVal();
+
+        if (exprUnary(left)) {
             if (consume(TokenType.ASSIGN)) {
-                if (exprAssign()) {
+                if (!left.isLVal) {
+                    tkerr("Left side of assignment is not assignable");
+                }
+
+                RetVal right = new RetVal();
+
+                if (exprAssign(right)) {
+                    rv.type = left.type;
+                    rv.isLVal = false;
+                    rv.isCtVal = false;
                     return true;
                 }
             }
         }
 
         crtIdx = startIdx;
-        return exprOr();
+        return exprOr(rv);
     }
 
     // exprOr: exprAnd ( OR exprAnd )*
     private boolean exprOr() {
-        if (exprAnd()) {
+    RetVal rv = new RetVal();
+    return exprOr(rv);
+}
+
+    private boolean exprOr(RetVal rv) {
+        if (exprAnd(rv)) {
             while (consume(TokenType.OR)) {
-                if (!exprAnd()) {
+                RetVal right = new RetVal();
+
+                if (!exprAnd(right)) {
                     tkerr("Invalid expression after ||");
                 }
+
+                rv.type = new Type(TypeBase.TB_INT);
+                rv.isLVal = false;
+                rv.isCtVal = false;
             }
 
             return true;
@@ -482,11 +514,22 @@ public class Parser {
 
     // exprAnd: exprEq ( AND exprEq )*
     private boolean exprAnd() {
-        if (exprEq()) {
+    RetVal rv = new RetVal();
+    return exprAnd(rv);
+}
+
+    private boolean exprAnd(RetVal rv) {
+        if (exprEq(rv)) {
             while (consume(TokenType.AND)) {
-                if (!exprEq()) {
+                RetVal right = new RetVal();
+
+                if (!exprEq(right)) {
                     tkerr("Invalid expression after &&");
                 }
+
+                rv.type = new Type(TypeBase.TB_INT);
+                rv.isLVal = false;
+                rv.isCtVal = false;
             }
 
             return true;
@@ -497,11 +540,22 @@ public class Parser {
 
     // exprEq: exprRel ( ( EQUAL | NOT_EQUAL ) exprRel )*
     private boolean exprEq() {
-        if (exprRel()) {
+    RetVal rv = new RetVal();
+    return exprEq(rv);
+}
+
+    private boolean exprEq(RetVal rv) {
+        if (exprRel(rv)) {
             while (consume(TokenType.EQUAL) || consume(TokenType.NOT_EQUAL)) {
-                if (!exprRel()) {
+                RetVal right = new RetVal();
+
+                if (!exprRel(right)) {
                     tkerr("Invalid equality expression");
                 }
+
+                rv.type = new Type(TypeBase.TB_INT);
+                rv.isLVal = false;
+                rv.isCtVal = false;
             }
 
             return true;
@@ -512,15 +566,26 @@ public class Parser {
 
     // exprRel: exprAdd ( ( LESS | LESS_EQUAL | GREATER | GREATER_EQUAL ) exprAdd )*
     private boolean exprRel() {
-        if (exprAdd()) {
-            while (consume(TokenType.LESS) ||
-                   consume(TokenType.LESS_EQUAL) ||
-                   consume(TokenType.GREATER) ||
-                   consume(TokenType.GREATER_EQUAL)) {
+        RetVal rv = new RetVal();
+        return exprRel(rv);
+    }
 
-                if (!exprAdd()) {
+    private boolean exprRel(RetVal rv) {
+        if (exprAdd(rv)) {
+            while (consume(TokenType.LESS) ||
+                consume(TokenType.LESS_EQUAL) ||
+                consume(TokenType.GREATER) ||
+                consume(TokenType.GREATER_EQUAL)) {
+
+                RetVal right = new RetVal();
+
+                if (!exprAdd(right)) {
                     tkerr("Invalid relational expression");
                 }
+
+                rv.type = new Type(TypeBase.TB_INT);
+                rv.isLVal = false;
+                rv.isCtVal = false;
             }
 
             return true;
@@ -531,11 +596,22 @@ public class Parser {
 
     // exprAdd: exprMul ( ( PLUS | MINUS ) exprMul )*
     private boolean exprAdd() {
-        if (exprMul()) {
+        RetVal rv = new RetVal();
+        return exprAdd(rv);
+    }   
+
+    private boolean exprAdd(RetVal rv) {
+        if (exprMul(rv)) {
             while (consume(TokenType.PLUS) || consume(TokenType.MINUS)) {
-                if (!exprMul()) {
+                RetVal right = new RetVal();
+
+                if (!exprMul(right)) {
                     tkerr("Invalid additive expression");
                 }
+
+                rv.type = getArithType(rv.type, right.type);
+                rv.isLVal = false;
+                rv.isCtVal = false;
             }
 
             return true;
@@ -546,14 +622,25 @@ public class Parser {
 
     // exprMul: exprCast ( ( MULTIPLY | DIVIDE | MODULO ) exprCast )*
     private boolean exprMul() {
-        if (exprCast()) {
-            while (consume(TokenType.MULTIPLY) ||
-                   consume(TokenType.DIVIDE) ||
-                   consume(TokenType.MODULO)) {
+        RetVal rv = new RetVal();
+        return exprMul(rv);
+    }
 
-                if (!exprCast()) {
+    private boolean exprMul(RetVal rv) {
+        if (exprCast(rv)) {
+            while (consume(TokenType.MULTIPLY) ||
+                consume(TokenType.DIVIDE) ||
+                consume(TokenType.MODULO)) {
+
+                RetVal right = new RetVal();
+
+                if (!exprCast(right)) {
                     tkerr("Invalid multiplicative expression");
                 }
+
+                rv.type = getArithType(rv.type, right.type);
+                rv.isLVal = false;
+                rv.isCtVal = false;
             }
 
             return true;
@@ -564,14 +651,25 @@ public class Parser {
 
     // exprCast: LPAREN typeBase arrayDecl? RPAREN exprCast | exprUnary
     private boolean exprCast() {
+        RetVal rv = new RetVal();
+        return exprCast(rv);
+    }
+
+    private boolean exprCast(RetVal rv) {
         int startIdx = crtIdx;
-        Type type = new Type(null);
+        Type castType = new Type(null);
+
         if (consume(TokenType.LPAREN)) {
-            if (typeBase(type)) {
-                arrayDecl();
+            if (typeBase(castType)) {
+                arrayDecl(castType);
 
                 if (consume(TokenType.RPAREN)) {
-                    if (exprCast()) {
+                    RetVal inner = new RetVal();
+
+                    if (exprCast(inner)) {
+                        rv.type = castType;
+                        rv.isLVal = false;
+                        rv.isCtVal = false;
                         return true;
                     }
                 }
@@ -579,21 +677,31 @@ public class Parser {
         }
 
         crtIdx = startIdx;
-        return exprUnary();
+        return exprUnary(rv);
     }
 
     // exprUnary: ( MINUS | NOT ) exprUnary | exprPostfix
     private boolean exprUnary() {
+        RetVal rv = new RetVal();
+        return exprUnary(rv);
+    }
+
+    private boolean exprUnary(RetVal rv) {
         int startIdx = crtIdx;
 
         if (consume(TokenType.MINUS) || consume(TokenType.NOT)) {
-            if (exprUnary()) {
+            RetVal inner = new RetVal();
+
+            if (exprUnary(inner)) {
+                rv.type = inner.type;
+                rv.isLVal = false;
+                rv.isCtVal = false;
                 return true;
             }
         }
 
         crtIdx = startIdx;
-        return exprPostfix();
+        return exprPostfix(rv);
     }
 
     // exprPostfix:
@@ -601,9 +709,19 @@ public class Parser {
     //   | exprPostfix LBRACK expr RBRACK
     //   | exprPostfix DOT ID
     private boolean exprPostfix() {
-        if (exprPrimary()) {
+        RetVal rv = new RetVal();
+        return exprPostfix(rv);
+    }
+
+    private boolean exprPostfix(RetVal rv) {
+        if (exprPrimary(rv)) {
             while (true) {
                 if (consume(TokenType.LBRACK)) {
+                    if (rv.type.nElements < 0) {
+                        tkerr("Only an array can be indexed");
+                    }
+                    
+                    
                     if (!expr()) {
                         tkerr("Invalid array index expression");
                     }
@@ -612,6 +730,11 @@ public class Parser {
                         tkerr("Missing ] after array index");
                     }
 
+                    rv.type = new Type(rv.type.typeBase);
+                    rv.type.structSymbol = rv.type.structSymbol;
+                    rv.isLVal = true;
+                    rv.isCtVal = false;
+                    
                     continue;
                 }
 
@@ -619,6 +742,9 @@ public class Parser {
                     if (!consume(TokenType.IDENTIFIER)) {
                         tkerr("Missing field name after .");
                     }
+
+                    rv.isLVal = true;
+                    rv.isCtVal = false;
 
                     continue;
                 }
@@ -632,6 +758,11 @@ public class Parser {
         return false;
     }
 
+    private boolean exprPrimary(){
+        RetVal rv = new RetVal();
+        return exprPrimary(rv);
+    }
+
     // exprPrimary:
     //     ID ( LPAREN ( expr ( COMMA expr )* )? RPAREN )?
     //   | CT_INT
@@ -639,7 +770,7 @@ public class Parser {
     //   | CT_CHAR
     //   | CT_STRING
     //   | LPAREN expr RPAREN
-    private boolean exprPrimary() {
+    private boolean exprPrimary(RetVal rv) {
         int startIdx = crtIdx;
         int argCount = 0;
 
@@ -651,6 +782,15 @@ public class Parser {
             if(s == null){
                 tkerr("Undefined symbol: " + tk.getValue());
             }
+
+            rv.type = s.type;
+            if(s.kind == SymbolKind.SK_VAR || s.kind == SymbolKind.SK_PARAM){
+                rv.isLVal = true;
+            }
+            else{
+                rv.isLVal = false;
+            }
+            rv.isCtVal = false;
 
             if (consume(TokenType.LPAREN)) {
 
@@ -684,10 +824,34 @@ public class Parser {
         if (consume(TokenType.BASE10_NUMBER) ||
             consume(TokenType.BASE16_NUMBER) ||
             consume(TokenType.BASE8_NUMBER) ||
-            consume(TokenType.BASE2_NUMBER) ||
-            consume(TokenType.REAL_NUMBER) ||
-            consume(TokenType.CT_CHAR) ||
-            consume(TokenType.STRING)) {
+            consume(TokenType.BASE2_NUMBER)) {
+            
+                rv.type = new Type(TypeBase.TB_INT);
+                rv.isLVal = false;
+                rv.isCtVal = true;
+
+            return true;
+        }
+        if(consume(TokenType.REAL_NUMBER)){
+            rv.type = new Type(TypeBase.TB_DOUBLE);
+            rv.isLVal = false;
+            rv.isCtVal = true;
+
+            return true;
+        }
+        if(consume(TokenType.CT_CHAR)){
+            rv.type = new Type(TypeBase.TB_CHAR);
+            rv.isLVal = false;
+            rv.isCtVal = true;
+
+            return true;
+        }
+
+        if(consume(TokenType.STRING)){
+            rv.type = new Type(TypeBase.TB_CHAR);
+            rv.type.nElements = 0;
+            rv.isLVal = false;
+            rv.isCtVal = true;
 
             return true;
         }
@@ -696,6 +860,8 @@ public class Parser {
             if (!expr()) {
                 tkerr("Invalid expression after (");
             }
+
+            rv.isLVal = rv.isCtVal = false;
 
             if (!consume(TokenType.RPAREN)) {
                 tkerr("Missing ) after expression");
@@ -706,6 +872,26 @@ public class Parser {
 
         crtIdx = startIdx;
         return false;
+    }
+
+    private Type getArithType(Type a, Type b) {
+        if (a == null || b == null) {
+            tkerr("Invalid arithmetic expression");
+        }
+
+        if (a.nElements >= 0 || b.nElements >= 0) {
+            tkerr("Array cannot be used in arithmetic expression");
+        }
+
+        if (a.typeBase == TypeBase.TB_STRUCT || b.typeBase == TypeBase.TB_STRUCT) {
+            tkerr("Struct cannot be used in arithmetic expression");
+        }
+
+        if (a.typeBase == TypeBase.TB_DOUBLE || b.typeBase == TypeBase.TB_DOUBLE) {
+            return new Type(TypeBase.TB_DOUBLE);
+        }
+
+        return new Type(TypeBase.TB_INT);
     }
 
     public static void main(String[] args) {
