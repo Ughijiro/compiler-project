@@ -1,5 +1,3 @@
-int x;
-
-int main(){
-    x();
+int f(int a, double b) {
+    int x;
 }

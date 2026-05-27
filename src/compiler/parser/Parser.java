@@ -148,7 +148,7 @@ public class Parser {
                         tkerr("Missing ) after function parameters");
                     }
 
-                    if (!stmCompound()) {
+                    if (!stmCompound(false)) {
                         tkerr("Missing function body");
                     }
 
@@ -327,15 +327,23 @@ public class Parser {
 
     // stmCompound: LBRACE ( varDef | stm )* RBRACE
     private boolean stmCompound() {
+        return stmCompound(true);
+    }
+
+    private boolean stmCompound(boolean newDomain){
         int startIdx = crtIdx;
 
-        if (consume(TokenType.LBRACE)) {
-            symbolTable.pushDomain();
+        if(consume(TokenType.LBRACE)){
+            if(newDomain){
+                symbolTable.pushDomain();
+            }
 
-            while (varDef() || stm());
+            while(varDef() || stm());
 
-            if (consume(TokenType.RBRACE)) {
-                symbolTable.dropDomain();
+            if(consume(TokenType.RBRACE)){
+                if(newDomain){
+                    symbolTable.dropDomain();
+                }
                 return true;
             }
 
