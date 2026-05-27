@@ -641,6 +641,7 @@ public class Parser {
     //   | LPAREN expr RPAREN
     private boolean exprPrimary() {
         int startIdx = crtIdx;
+        int argCount = 0;
 
         if (consume(TokenType.IDENTIFIER)) {
             Token tk = tokens.get(crtIdx - 1);
@@ -657,11 +658,19 @@ public class Parser {
                     tkerr("Symbol is not a function: " + tk.getValue());
                 }
                 if (expr()) {
+                    argCount++;
+
                     while (consume(TokenType.COMMA)) {
                         if (!expr()) {
                             tkerr("Invalid function call argument");
                         }
+
+                        argCount++;
                     }
+                }
+                
+                if(argCount != s.fnParams.size()){
+                    tkerr("Invalid number of arguments in call to " + tk.getValue());
                 }
 
                 if (!consume(TokenType.RPAREN)) {
