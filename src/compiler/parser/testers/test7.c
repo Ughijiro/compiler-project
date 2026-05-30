@@ -1,7 +1,5 @@
-int f(int x) {
-    return x;
-}
+int v[10];
 
 int main() {
-    f("abc");
+    if (v == 0) {}
 }

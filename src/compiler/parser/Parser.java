@@ -13,6 +13,8 @@ public class Parser {
 
     private SymbolTable symbolTable = new SymbolTable();
 
+    private Symbol currentFunction = null;
+
     public Parser(List<Token> tokens) {
         this.tokens = tokens;
     }
@@ -132,6 +134,9 @@ public class Parser {
                     fnSymbol.mem = MemoryLocation.MEM_GLOBAL;
                     symbolTable.addSymbol(fnSymbol);
 
+                    Symbol oldFunction = currentFunction;
+                    currentFunction = fnSymbol;
+
                     Symbol oldOwner = symbolTable.currentOwner;
                     symbolTable.currentOwner = fnSymbol;
                     symbolTable.pushDomain();
@@ -154,6 +159,8 @@ public class Parser {
 
                     symbolTable.dropDomain();
                     symbolTable.currentOwner = oldOwner;
+                    currentFunction = oldFunction;
+                    
                     return true;
                 }
             }
@@ -424,7 +431,26 @@ public class Parser {
         }
 
         if (consume(TokenType.RETURN)) {
-            expr();
+            if (currentFunction == null) {
+                tkerr("Return outside function");
+            }
+
+            RetVal rv = new RetVal();
+            boolean hasExpr = expr(rv);
+
+            if (currentFunction.type.typeBase == TypeBase.TB_VOID) {
+                if (hasExpr) {
+                    tkerr("Void function cannot return a value");
+                }
+            } else {
+                if (!hasExpr) {
+                    tkerr("Non-void function must return a value");
+                }
+
+                if (!canConvert(rv.type, currentFunction.type)) {
+                    tkerr("Invalid return type");
+                }
+            }
 
             if (!consume(TokenType.SEMICOLON)) {
                 tkerr("Missing ; after return");
@@ -556,6 +582,15 @@ public class Parser {
                     tkerr("Invalid equality expression");
                 }
 
+                if (rv.type.nElements >= 0 || right.type.nElements >= 0) {
+                    tkerr("Array cannot be used in relational expression");
+                }
+
+                if (rv.type.typeBase == TypeBase.TB_STRUCT ||
+                    right.type.typeBase == TypeBase.TB_STRUCT) {
+                    tkerr("Struct cannot be used in relational expression");
+                }
+
                 rv.type = new Type(TypeBase.TB_INT);
                 rv.isLVal = false;
                 rv.isCtVal = false;
@@ -586,6 +621,15 @@ public class Parser {
                     tkerr("Invalid relational expression");
                 }
 
+                if (rv.type.nElements >= 0 || right.type.nElements >= 0) {
+                    tkerr("Array cannot be used in relational expression");
+                }
+
+                if (rv.type.typeBase == TypeBase.TB_STRUCT ||
+                    right.type.typeBase == TypeBase.TB_STRUCT) {
+                    tkerr("Struct cannot be used in relational expression");
+                }
+                
                 rv.type = new Type(TypeBase.TB_INT);
                 rv.isLVal = false;
                 rv.isCtVal = false;
@@ -668,6 +712,11 @@ public class Parser {
 
                 if (consume(TokenType.RPAREN)) {
                     RetVal inner = new RetVal();
+                    
+                    if (inner.type.typeBase == TypeBase.TB_STRUCT ||
+                        castType.typeBase == TypeBase.TB_STRUCT) {
+                        tkerr("Cannot cast struct types");
+                    }
 
                     if (exprCast(inner)) {
                         rv.type = castType;
@@ -696,6 +745,15 @@ public class Parser {
             RetVal inner = new RetVal();
 
             if (exprUnary(inner)) {
+
+                if (inner.type.nElements >= 0) {
+                    tkerr("Array cannot be used with unary operator");
+                }
+
+                if (inner.type.typeBase == TypeBase.TB_STRUCT) {
+                    tkerr("Struct cannot be used with unary operator");
+                }
+
                 rv.type = inner.type;
                 rv.isLVal = false;
                 rv.isCtVal = false;
