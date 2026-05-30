@@ -330,10 +330,6 @@ public class Parser {
     }
 
     // arrayDecl: LBRACK CT_INT? RBRACK
-    private boolean arrayDecl() {
-        return arrayDecl(null);
-    }
-
     private boolean arrayDecl(Type type) {
         int startIdx = crtIdx;
 
