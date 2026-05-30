@@ -1,3 +1,7 @@
-int x;
-double y;
-x + y;      // ok -> double
+int f(int x) {
+    return x;
+}
+
+int main() {
+    f("abc");
+}

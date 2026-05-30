@@ -474,6 +474,9 @@ public class Parser {
                 RetVal right = new RetVal();
 
                 if (exprAssign(right)) {
+                    if (!canConvert(right.type, left.type)) {
+                        tkerr("Incompatible types in assignment");
+                    }
                     rv.type = left.type;
                     rv.isLVal = false;
                     rv.isCtVal = false;
@@ -720,18 +723,32 @@ public class Parser {
                     if (rv.type.nElements < 0) {
                         tkerr("Only an array can be indexed");
                     }
-                    
-                    
-                    if (!expr()) {
+                    RetVal index = new RetVal();
+
+                    if (!expr(index)) {
                         tkerr("Invalid array index expression");
                     }
 
-                    if (!consume(TokenType.RBRACK)) {
-                        tkerr("Missing ] after array index");
+                    if (index.type == null) {
+                        tkerr("Invalid array index type");
                     }
 
-                    rv.type = new Type(rv.type.typeBase);
-                    rv.type.structSymbol = rv.type.structSymbol;
+                    if(index.type.nElements >=0){
+                        tkerr("Array index cannot be an array");
+                    }
+
+                    if(index.type.typeBase != TypeBase.TB_INT && 
+                        index.type.typeBase != TypeBase.TB_CHAR){
+                            tkerr("Array index must be int or char");
+                    }
+
+                    if (!consume(TokenType.RBRACK)) {
+                        tkerr("Missing1 ] after array index");
+                    }
+
+                    Type oldType = rv.type;
+                    rv.type = new Type(oldType.typeBase);
+                    rv.type.structSymbol = oldType.structSymbol;
                     rv.isLVal = true;
                     rv.isCtVal = false;
                     
@@ -739,10 +756,29 @@ public class Parser {
                 }
 
                 if (consume(TokenType.DOT)) {
+                    if(rv.type.typeBase != TypeBase.TB_STRUCT){
+                        tkerr("Left side of . is not a struct");
+                    }
+
+                    Token fieldTk = crtTk();
+
                     if (!consume(TokenType.IDENTIFIER)) {
                         tkerr("Missing field name after .");
                     }
 
+                    Symbol field = null;
+                    for(Symbol member : rv.type.structSymbol.structMembers){
+                        if(member.name.equals(fieldTk.getValue())){
+                            field = member;
+                            break;
+                        }
+                    }
+
+                    if(field == null){
+                        tkerr("Struct has no member: " + fieldTk.getValue());
+                    }
+
+                    rv.type = field.type;
                     rv.isLVal = true;
                     rv.isCtVal = false;
 
@@ -773,6 +809,8 @@ public class Parser {
     private boolean exprPrimary(RetVal rv) {
         int startIdx = crtIdx;
         int argCount = 0;
+        int argIndex = 0;
+        RetVal arg = new RetVal();
 
         if (consume(TokenType.IDENTIFIER)) {
             Token tk = tokens.get(crtIdx - 1);
@@ -797,26 +835,50 @@ public class Parser {
                 if (s.kind != SymbolKind.SK_FN) {
                     tkerr("Symbol is not a function: " + tk.getValue());
                 }
-                if (expr()) {
+
+                
+                if (expr(arg)) {
+
+                    if(argIndex >= s.fnParams.size()){
+                        tkerr("Too many arguments in call to " + tk.getValue());
+                    }
+
+                    if(!canConvert(arg.type, s.fnParams.get(argIndex).type)){
+                        tkerr("Invalid argument type is call to " + tk.getValue());
+                    }
+
                     argCount++;
+                    argIndex++;
 
                     while (consume(TokenType.COMMA)) {
-                        if (!expr()) {
+                        arg = new RetVal();
+
+                        if (!expr(arg)) {
                             tkerr("Invalid function call argument");
+                        }
+                        if(argIndex >= s.fnParams.size()){
+                            tkerr("Too many arguments in call to " + tk.getValue());
+                        }
+
+                        if(!canConvert(arg.type, s.fnParams.get(argIndex).type)){
+                            tkerr("Invalid argument type is call to " + tk.getValue());
                         }
 
                         argCount++;
+                        argIndex++;
                     }
-                }
-
-                if(argCount != s.fnParams.size()){
-                    tkerr("Invalid number of arguments in call to " + tk.getValue());
                 }
 
                 if (!consume(TokenType.RPAREN)) {
                     tkerr("Missing ) after function call");
                 }
+                
+                if(argCount != s.fnParams.size()){
+                    tkerr("Invalid number of arguments in call to " + tk.getValue());
+                }
+
             }
+
 
             return true;
         }
@@ -857,11 +919,15 @@ public class Parser {
         }
 
         if (consume(TokenType.LPAREN)) {
-            if (!expr()) {
+            RetVal inner = new RetVal();
+
+            if (!expr(inner)) {
                 tkerr("Invalid expression after (");
             }
 
-            rv.isLVal = rv.isCtVal = false;
+            rv.type = inner.type;
+            rv.isLVal = inner.isLVal;
+            rv.isCtVal = inner.isCtVal;
 
             if (!consume(TokenType.RPAREN)) {
                 tkerr("Missing ) after expression");
@@ -894,11 +960,44 @@ public class Parser {
         return new Type(TypeBase.TB_INT);
     }
 
+    private boolean canConvert(Type src, Type dst) {
+
+        if (src.nElements >= 0 || dst.nElements >= 0) {
+            return src.nElements == dst.nElements
+                && src.typeBase == dst.typeBase;
+        }
+
+        if (src.typeBase == dst.typeBase) {
+            return true;
+        }
+
+        if ((src.typeBase == TypeBase.TB_INT ||
+            src.typeBase == TypeBase.TB_CHAR)
+            &&
+            (dst.typeBase == TypeBase.TB_INT ||
+            dst.typeBase == TypeBase.TB_CHAR ||
+            dst.typeBase == TypeBase.TB_DOUBLE)) {
+
+            return true;
+        }
+
+        if (src.typeBase == TypeBase.TB_DOUBLE
+            &&
+            (dst.typeBase == TypeBase.TB_DOUBLE ||
+            dst.typeBase == TypeBase.TB_INT ||
+            dst.typeBase == TypeBase.TB_CHAR)) {
+
+            return true;
+        }
+
+        return false;
+    }
+
     public static void main(String[] args) {
 
         try {
 
-            String path = "src/compiler/lexer/testers/0.c";
+            String path = "src/compiler/parser/testers/test7.c";
 
             String input = java.nio.file.Files.readString(
                     java.nio.file.Paths.get(path)
@@ -937,8 +1036,6 @@ public class Parser {
             // SymbolTable
 
             parser.symbolTable.printSymbols();
-            System.out.println(
-            parser.symbolTable.currentOwner.fnParams);
 
         } catch (Exception e) {
 
