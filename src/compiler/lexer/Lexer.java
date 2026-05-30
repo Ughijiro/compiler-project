@@ -3,11 +3,17 @@ package compiler.lexer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 
+// The lexer splits the source code into tokens.
+// Spaces and comments are skipped because the parser does not need them.
+
 public class Lexer {
 
     private String input;
     private int idx = 0;
     private int line = 1;
+
+    // Explicit states are used to implement the transition diagram from the course.
+    // Each state represents that we are currently recognizing a specific token type.
 
     private enum State {
         START,
@@ -63,6 +69,9 @@ public class Lexer {
             }
         }
     }
+
+    // Keywords have the same lexical structure as identifiers.
+    // First we recognize an identifier, then we check if its text is a reserved keyword.
 
     private Token checkIfKeyword(String word, int tokenLine) {
         switch (word) {
@@ -174,6 +183,9 @@ public class Lexer {
         }
     }
 
+    // getNextToken() returns one token at a time.
+    // The parser will later work only with tokens, not raw characters.
+
     public Token getNextToken() {
         skipSpaces();
 
@@ -228,6 +240,8 @@ public class Lexer {
                         buf.append(c);
                         idx++;
                     } else {
+                        // the current character does not belong
+                        // to the identifier anymore, so we do not consume it here.
                         return checkIfKeyword(buf.toString(), tokenLine);
                     }
                     break;

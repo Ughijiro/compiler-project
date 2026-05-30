@@ -1,5 +1,12 @@
 package compiler.lexer;
 
+// A token is the result of lexical analysis.
+// It contains:
+// - the token type, such as IDENTIFIER or INT
+// - the lexeme/value, such as "x" or "123"
+// - the source line, used for error messages
+
+
 public class Token{
 
     private TokenType type;

@@ -1,5 +1,8 @@
 package compiler.lexer;
 
+// TokenType contains all token codes known by the compiler.
+// These are the terminal symbols used by the parser grammar.
+
 public enum TokenType {
     
     IDENTIFIER,

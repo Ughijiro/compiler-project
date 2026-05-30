@@ -3,17 +3,20 @@ package compiler.semantic;
 import java.util.ArrayList;
 import java.util.List;
 
+// Keeps all visible symbols during semantic analysis
 public class SymbolTable {
     private List<Symbol> symbols = new ArrayList<>();
     public int currentDepth = 0;
-    public Symbol currentOwner = null; // To track if we are in a struct or function
 
-    // Just increases depth
+    // Current function or struct, used when adding params/local vars/members
+    public Symbol currentOwner = null;
+
+    // Enter a new scope/domain
     public void pushDomain() {
         currentDepth++;
     }
 
-    // Deletes symbols from the current depth
+    // Leave current scope and remove its symbols
     public void dropDomain() {
         // We remove everything that was added at this depth
         for (int i = symbols.size() - 1; i >= 0; i--) {
@@ -24,7 +27,7 @@ public class SymbolTable {
         currentDepth--;
     }
 
-    //Adds at the end of the list
+    // Add symbol in the current scope
     public void addSymbol(Symbol s) {
         s.depth = currentDepth;
         symbols.add(s);
@@ -40,7 +43,7 @@ public class SymbolTable {
         return null;
     }
 
-    // Used for redefinition checks in the current scope only
+    // Search only in current scope, used for redefinition checks
     public Symbol findInCurrentDomain(String name) {
         for (int i = symbols.size() - 1; i >= 0; i--) {
             Symbol s = symbols.get(i);
