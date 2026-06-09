@@ -9,9 +9,7 @@ import java.util.List;
 // Recursive descent parser with semantic and type analysis.
 public class Parser {
 
-    // =====================
     // Parser state
-    // =====================
 
     private List<Token> tokens;
     private int crtIdx = 0;
@@ -25,9 +23,7 @@ public class Parser {
         this.tokens = tokens;
     }
 
-    // =====================
     // Basic parser helpers
-    // =====================
 
     private Token crtTk() {
         if (crtIdx >= tokens.size()) {
@@ -57,16 +53,13 @@ public class Parser {
         return new Type(TypeBase.TB_VOID);
     }
 
-    // =====================
     // Top-level grammar rule
-    // =====================
 
     // unit: ( structDef | fnDef | varDef )* EOF
     public boolean unit() {
         while (!consume(TokenType.EOF)) {
             int startIdx = crtIdx;
 
-            // Try each possible top-level declaration.
             if (structDef()) continue;
             crtIdx = startIdx;
 
@@ -82,9 +75,7 @@ public class Parser {
         return true;
     }
 
-    // =====================
     // Declarations and types
-    // =====================
 
     // structDef: STRUCT ID LBRACE varDef* RBRACE SEMICOLON
     private boolean structDef() {
@@ -99,12 +90,10 @@ public class Parser {
                     return false;
                 }
 
-                // Struct names must be unique in the current scope.
                 if (symbolTable.findInCurrentDomain(tk.getValue()) != null) {
                     tkerr("Symbol redefinition: " + tk.getValue());
                 }
 
-                // Add struct to the symbol table.
                 Symbol structSymbol = new Symbol(tk.getValue(), SymbolKind.SK_STRUCT);
                 structSymbol.type = new Type(TypeBase.TB_STRUCT);
                 structSymbol.type.structSymbol = structSymbol;
@@ -115,12 +104,10 @@ public class Parser {
                 Symbol oldOwner = symbolTable.currentOwner;
                 symbolTable.currentOwner = structSymbol;
 
-                // Enter struct scope.
                 symbolTable.pushDomain();
 
                 while (varDef());
 
-                // Leave struct scope.
                 symbolTable.dropDomain();
                 symbolTable.currentOwner = oldOwner;
 
@@ -151,12 +138,10 @@ public class Parser {
             if (consume(TokenType.IDENTIFIER)) {
                 if (consume(TokenType.LPAREN)) {
 
-                    // Function names must be unique in the current scope.
                     if (symbolTable.findInCurrentDomain(tkName.getValue()) != null) {
                         tkerr("Symbol redefinition: " + tkName.getValue());
                     }
 
-                    // Add function to the symbol table.
                     Symbol fnSymbol = new Symbol(tkName.getValue(), SymbolKind.SK_FN);
                     fnSymbol.type = type;
                     fnSymbol.mem = MemoryLocation.MEM_GLOBAL;
@@ -168,7 +153,6 @@ public class Parser {
                     Symbol oldOwner = symbolTable.currentOwner;
                     symbolTable.currentOwner = fnSymbol;
 
-                    // Function parameters live in the function scope.
                     symbolTable.pushDomain();
 
                     if (fnParam()) {
@@ -206,22 +190,26 @@ public class Parser {
         int startIdx = crtIdx;
 
         Type type = new Type(null);
+
         if (typeBase(type)) {
             if (consume(TokenType.IDENTIFIER)) {
                 Token tk = tokens.get(crtIdx - 1);
 
-                // Parameter names must be unique in the function scope.
                 if (symbolTable.findInCurrentDomain(tk.getValue()) != null) {
                     tkerr("Redefinition of parameter: " + tk.getValue());
                 }
 
-                arrayDecl(type);
+                boolean isArrayParam = arrayDecl(type);
+
+                // Lab rule: int v[10] parameter becomes int v[]
+                if (isArrayParam) {
+                    type.nElements = 0;
+                }
 
                 Symbol param = new Symbol(tk.getValue(), SymbolKind.SK_PARAM);
                 param.type = type;
                 param.mem = MemoryLocation.MEM_ARG;
 
-                // Keep parameters for future function call checks.
                 if (symbolTable.currentOwner != null &&
                     symbolTable.currentOwner.kind == SymbolKind.SK_FN) {
                     symbolTable.currentOwner.fnParams.add(param);
@@ -241,20 +229,18 @@ public class Parser {
         int startIdx = crtIdx;
 
         Type type = new Type(null);
+
         if (typeBase(type)) {
             if (consume(TokenType.IDENTIFIER)) {
                 Token tk = tokens.get(crtIdx - 1);
 
-                // Variables cannot be redefined in the same scope.
-                Symbol s = symbolTable.findInCurrentDomain(tk.getValue());
-                if (s != null) {
+                if (symbolTable.findInCurrentDomain(tk.getValue()) != null) {
                     tkerr("Redefinition of symbol: " + tk.getValue());
                 }
 
                 Symbol var = new Symbol(tk.getValue(), SymbolKind.SK_VAR);
                 var.type = type;
 
-                // Determine where the variable is stored.
                 if (symbolTable.currentOwner != null &&
                     symbolTable.currentOwner.kind == SymbolKind.SK_STRUCT) {
                     var.mem = null;
@@ -264,7 +250,6 @@ public class Parser {
                     var.mem = MemoryLocation.MEM_LOCAL;
                 }
 
-                // Register local variables or struct members.
                 if (symbolTable.currentOwner != null) {
                     if (symbolTable.currentOwner.kind == SymbolKind.SK_FN) {
                         symbolTable.currentOwner.fnLocals.add(var);
@@ -276,6 +261,11 @@ public class Parser {
                 }
 
                 arrayDecl(type);
+
+                if (type.nElements == 0) {
+                    tkerr("A vector variable must have a specified dimension");
+                }
+
                 symbolTable.addSymbol(var);
 
                 if (consume(TokenType.SEMICOLON)) {
@@ -311,10 +301,10 @@ public class Parser {
 
         if (consume(TokenType.STRUCT)) {
             Token tk = crtTk();
-            if (consume(TokenType.IDENTIFIER)) {
 
-                // Struct type must already be defined.
+            if (consume(TokenType.IDENTIFIER)) {
                 Symbol s = symbolTable.findSymbol(tk.getValue());
+
                 if (s == null || s.kind != SymbolKind.SK_STRUCT) {
                     tkerr("Undefined struct type: " + tk.getValue());
                 }
@@ -334,53 +324,53 @@ public class Parser {
         int startIdx = crtIdx;
 
         if (consume(TokenType.LBRACK)) {
-            int nElements = 0;
+            int nElements = 0; // 0 means []
 
             if (crtTk().getTokenType() != TokenType.RBRACK) {
                 Token sizeToken = crtTk();
 
-                if (!expr()) {
-                    tkerr("Invalid array size expression");
-                }
-
-                if (sizeToken.getTokenType() == TokenType.BASE10_NUMBER) {
+                if (consume(TokenType.BASE10_NUMBER)) {
                     try {
-                        nElements = Integer.parseInt(sizeToken.getValue());
+                        nElements = Integer.decode(sizeToken.getValue());
                     } catch (NumberFormatException e) {
-                        nElements = 0;
+                        tkerr("Invalid array size");
                     }
+
+                    if (nElements <= 0) {
+                        tkerr("Array size must be greater than 0");
+                    }
+                } else {
+                    tkerr("Array size must be an integer constant");
                 }
             }
 
-            if (consume(TokenType.RBRACK)) {
-                if (type != null) {
-                    type.nElements = nElements;
-                }
-                return true;
+            if (!consume(TokenType.RBRACK)) {
+                tkerr("Missing ] in array declaration");
             }
 
-            tkerr("Missing ] in array declaration");
+            if (type != null) {
+                type.nElements = nElements;
+            }
+
+            return true;
         }
 
         crtIdx = startIdx;
         return false;
     }
 
-    // =====================
     // Statements
-    // =====================
 
-    // stmCompound: LBRACE ( varDef | stm )* RBRACE
     private boolean stmCompound() {
         return stmCompound(true);
     }
 
+    // stmCompound: LBRACE ( varDef | stm )* RBRACE
     private boolean stmCompound(boolean newDomain) {
         int startIdx = crtIdx;
 
         if (consume(TokenType.LBRACE)) {
             if (newDomain) {
-                // Enter a new block scope.
                 symbolTable.pushDomain();
             }
 
@@ -388,9 +378,9 @@ public class Parser {
 
             if (consume(TokenType.RBRACE)) {
                 if (newDomain) {
-                    // Leave block scope.
                     symbolTable.dropDomain();
                 }
+
                 return true;
             }
 
@@ -413,42 +403,93 @@ public class Parser {
         if (stmCompound()) return true;
 
         if (consume(TokenType.IF)) {
-            if (!consume(TokenType.LPAREN)) tkerr("Missing ( after if");
-            if (!expr()) tkerr("Invalid expression in if");
-            if (!consume(TokenType.RPAREN)) tkerr("Missing ) after if condition");
-            if (!stm()) tkerr("Missing statement after if");
+            if (!consume(TokenType.LPAREN)) {
+                tkerr("Missing ( after if");
+            }
+
+            RetVal cond = new RetVal();
+
+            if (!expr(cond)) {
+                tkerr("Invalid expression in if");
+            }
+
+            if (!canBeScalar(cond)) {
+                tkerr("The if condition must be scalar");
+            }
+
+            if (!consume(TokenType.RPAREN)) {
+                tkerr("Missing ) after if condition");
+            }
+
+            if (!stm()) {
+                tkerr("Missing statement after if");
+            }
 
             if (consume(TokenType.ELSE)) {
-                if (!stm()) tkerr("Missing statement after else");
+                if (!stm()) {
+                    tkerr("Missing statement after else");
+                }
             }
 
             return true;
         }
 
         if (consume(TokenType.WHILE)) {
-            if (!consume(TokenType.LPAREN)) tkerr("Missing ( after while");
-            if (!expr()) tkerr("Invalid expression in while");
-            if (!consume(TokenType.RPAREN)) tkerr("Missing ) after while condition");
-            if (!stm()) tkerr("Missing statement after while");
+            if (!consume(TokenType.LPAREN)) {
+                tkerr("Missing ( after while");
+            }
+
+            RetVal cond = new RetVal();
+
+            if (!expr(cond)) {
+                tkerr("Invalid expression in while");
+            }
+
+            if (!canBeScalar(cond)) {
+                tkerr("The while condition must be scalar");
+            }
+
+            if (!consume(TokenType.RPAREN)) {
+                tkerr("Missing ) after while condition");
+            }
+
+            if (!stm()) {
+                tkerr("Missing statement after while");
+            }
 
             return true;
         }
 
         if (consume(TokenType.FOR)) {
-            if (!consume(TokenType.LPAREN)) tkerr("Missing ( after for");
+            if (!consume(TokenType.LPAREN)) {
+                tkerr("Missing ( after for");
+            }
 
+            // init expression: optional
             expr();
 
             if (!consume(TokenType.SEMICOLON)) {
                 tkerr("Missing first ; in for");
             }
 
-            expr();
+            // condition expression: optional, but if present it must be scalar
+            if (crtTk().getTokenType() != TokenType.SEMICOLON) {
+                RetVal cond = new RetVal();
+
+                if (!expr(cond)) {
+                    tkerr("Invalid for condition");
+                }
+
+                if (!canBeScalar(cond)) {
+                    tkerr("The for condition must be scalar");
+                }
+            }
 
             if (!consume(TokenType.SEMICOLON)) {
                 tkerr("Missing second ; in for");
             }
 
+            // step expression: optional
             expr();
 
             if (!consume(TokenType.RPAREN)) {
@@ -478,7 +519,6 @@ public class Parser {
             RetVal rv = new RetVal();
             boolean hasExpr = expr(rv);
 
-            // Return type must match the current function type.
             if (currentFunction.type.typeBase == TypeBase.TB_VOID) {
                 if (hasExpr) {
                     tkerr("Void function cannot return a value");
@@ -486,6 +526,10 @@ public class Parser {
             } else {
                 if (!hasExpr) {
                     tkerr("Non-void function must return a value");
+                }
+
+                if (!canBeScalar(rv)) {
+                    tkerr("Return value must be scalar");
                 }
 
                 if (!canConvert(rv.type, currentFunction.type)) {
@@ -515,14 +559,13 @@ public class Parser {
     // Expressions
     // =====================
 
-    // expr: exprAssign
     private boolean expr() {
         RetVal rv = new RetVal();
         return expr(rv);
     }
 
+    // expr: exprAssign
     private boolean expr(RetVal rv) {
-        // Start expression parsing and semantic analysis.
         return exprAssign(rv);
     }
 
@@ -530,27 +573,45 @@ public class Parser {
     private boolean exprAssign(RetVal rv) {
         int startIdx = crtIdx;
 
-        RetVal left = new RetVal();
+        // Important:
+        // If the expression starts with a cast, like (int)v,
+        // do not try to parse it as an assignment destination.
+        // Let exprOr -> ... -> exprCast handle it.
+        if (!isCastStart()) {
+            RetVal left = new RetVal();
 
-        if (exprUnary(left)) {
-            if (consume(TokenType.ASSIGN)) {
+            if (exprUnary(left)) {
+                if (consume(TokenType.ASSIGN)) {
+                    RetVal right = new RetVal();
 
-                // Left side of assignment must be assignable.
-                if (!left.isLVal) {
-                    tkerr("Left side of assignment is not assignable");
-                }
-
-                RetVal right = new RetVal();
-
-                if (exprAssign(right)) {
-                    // Right side must be compatible with the left side type.
-                    if (!canConvert(right.type, left.type)) {
-                        tkerr("Incompatible types in assignment");
+                    if (!exprAssign(right)) {
+                        tkerr("Invalid expression after =");
                     }
 
-                    rv.type = left.type;
+                    if (!left.isLVal) {
+                        tkerr("Assignment destination must be a left-value");
+                    }
+
+                    if (left.isCtVal) {
+                        tkerr("Assignment destination cannot be constant");
+                    }
+
+                    if (!canBeScalar(left)) {
+                        tkerr("Assignment destination must be scalar");
+                    }
+
+                    if (!canBeScalar(right)) {
+                        tkerr("Assignment source must be scalar");
+                    }
+
+                    if (!canConvert(right.type, left.type)) {
+                        tkerr("Assignment source cannot be converted to destination");
+                    }
+
+                    rv.type = right.type;
                     rv.isLVal = false;
-                    rv.isCtVal = false;
+                    rv.isCtVal = true;
+
                     return true;
                 }
             }
@@ -559,7 +620,6 @@ public class Parser {
         crtIdx = startIdx;
         return exprOr(rv);
     }
-
     // exprOr: exprAnd ( OR exprAnd )*
     private boolean exprOr(RetVal rv) {
         if (exprAnd(rv)) {
@@ -570,9 +630,13 @@ public class Parser {
                     tkerr("Invalid expression after ||");
                 }
 
+                if (!canBeScalar(rv) || !canBeScalar(right)) {
+                    tkerr("Invalid operand type for ||");
+                }
+
                 rv.type = new Type(TypeBase.TB_INT);
                 rv.isLVal = false;
-                rv.isCtVal = false;
+                rv.isCtVal = true;
             }
 
             return true;
@@ -591,9 +655,13 @@ public class Parser {
                     tkerr("Invalid expression after &&");
                 }
 
+                if (!canBeScalar(rv) || !canBeScalar(right)) {
+                    tkerr("Invalid operand type for &&");
+                }
+
                 rv.type = new Type(TypeBase.TB_INT);
                 rv.isLVal = false;
-                rv.isCtVal = false;
+                rv.isCtVal = true;
             }
 
             return true;
@@ -612,18 +680,13 @@ public class Parser {
                     tkerr("Invalid equality expression");
                 }
 
-                if (rv.type.nElements >= 0 || right.type.nElements >= 0) {
-                    tkerr("Array cannot be used in relational expression");
-                }
-
-                if (rv.type.typeBase == TypeBase.TB_STRUCT ||
-                    right.type.typeBase == TypeBase.TB_STRUCT) {
-                    tkerr("Struct cannot be used in relational expression");
+                if (!canBeScalar(rv) || !canBeScalar(right)) {
+                    tkerr("Invalid operand type for == or !=");
                 }
 
                 rv.type = new Type(TypeBase.TB_INT);
                 rv.isLVal = false;
-                rv.isCtVal = false;
+                rv.isCtVal = true;
             }
 
             return true;
@@ -636,9 +699,9 @@ public class Parser {
     private boolean exprRel(RetVal rv) {
         if (exprAdd(rv)) {
             while (consume(TokenType.LESS) ||
-                consume(TokenType.LESS_EQUAL) ||
-                consume(TokenType.GREATER) ||
-                consume(TokenType.GREATER_EQUAL)) {
+                   consume(TokenType.LESS_EQUAL) ||
+                   consume(TokenType.GREATER) ||
+                   consume(TokenType.GREATER_EQUAL)) {
 
                 RetVal right = new RetVal();
 
@@ -646,18 +709,13 @@ public class Parser {
                     tkerr("Invalid relational expression");
                 }
 
-                if (rv.type.nElements >= 0 || right.type.nElements >= 0) {
-                    tkerr("Array cannot be used in relational expression");
-                }
-
-                if (rv.type.typeBase == TypeBase.TB_STRUCT ||
-                    right.type.typeBase == TypeBase.TB_STRUCT) {
-                    tkerr("Struct cannot be used in relational expression");
+                if (!canBeScalar(rv) || !canBeScalar(right)) {
+                    tkerr("Invalid operand type for relational operator");
                 }
 
                 rv.type = new Type(TypeBase.TB_INT);
                 rv.isLVal = false;
-                rv.isCtVal = false;
+                rv.isCtVal = true;
             }
 
             return true;
@@ -678,7 +736,7 @@ public class Parser {
 
                 rv.type = getArithType(rv.type, right.type);
                 rv.isLVal = false;
-                rv.isCtVal = false;
+                rv.isCtVal = true;
             }
 
             return true;
@@ -691,8 +749,8 @@ public class Parser {
     private boolean exprMul(RetVal rv) {
         if (exprCast(rv)) {
             while (consume(TokenType.MULTIPLY) ||
-                consume(TokenType.DIVIDE) ||
-                consume(TokenType.MODULO)) {
+                   consume(TokenType.DIVIDE) ||
+                   consume(TokenType.MODULO)) {
 
                 RetVal right = new RetVal();
 
@@ -702,7 +760,7 @@ public class Parser {
 
                 rv.type = getArithType(rv.type, right.type);
                 rv.isLVal = false;
-                rv.isCtVal = false;
+                rv.isCtVal = true;
             }
 
             return true;
@@ -724,14 +782,25 @@ public class Parser {
                     RetVal inner = new RetVal();
 
                     if (exprCast(inner)) {
-                        if (inner.type.typeBase == TypeBase.TB_STRUCT ||
-                            castType.typeBase == TypeBase.TB_STRUCT) {
-                            tkerr("Cannot cast struct types");
+                        if (castType.typeBase == TypeBase.TB_STRUCT) {
+                            tkerr("Cannot cast to a struct type");
+                        }
+
+                        if (inner.type.typeBase == TypeBase.TB_STRUCT) {
+                            tkerr("Cannot cast a struct value");
+                        }
+
+                        if (inner.type.nElements >= 0 && castType.nElements < 0) {
+                            tkerr("An array can be converted only to another array");
+                        }
+
+                        if (inner.type.nElements < 0 && castType.nElements >= 0) {
+                            tkerr("A scalar can be converted only to another scalar");
                         }
 
                         rv.type = castType;
                         rv.isLVal = false;
-                        rv.isCtVal = false;
+                        rv.isCtVal = true;
                         return true;
                     }
                 }
@@ -746,23 +815,36 @@ public class Parser {
     private boolean exprUnary(RetVal rv) {
         int startIdx = crtIdx;
 
-        if (consume(TokenType.MINUS) || consume(TokenType.NOT)) {
+        boolean isMinus = false;
+        boolean isNot = false;
+
+        if (consume(TokenType.MINUS)) {
+            isMinus = true;
+        } else if (consume(TokenType.NOT)) {
+            isNot = true;
+        }
+
+        if (isMinus || isNot) {
             RetVal inner = new RetVal();
 
-            if (exprUnary(inner)) {
-                if (inner.type.nElements >= 0) {
-                    tkerr("Array cannot be used with unary operator");
-                }
-
-                if (inner.type.typeBase == TypeBase.TB_STRUCT) {
-                    tkerr("Struct cannot be used with unary operator");
-                }
-
-                rv.type = inner.type;
-                rv.isLVal = false;
-                rv.isCtVal = false;
-                return true;
+            if (!exprUnary(inner)) {
+                tkerr("Invalid expression after unary operator");
             }
+
+            if (!canBeScalar(inner)) {
+                tkerr("Unary operator must have a scalar operand");
+            }
+
+            if (isNot) {
+                rv.type = new Type(TypeBase.TB_INT);
+            } else {
+                rv.type = inner.type;
+            }
+
+            rv.isLVal = false;
+            rv.isCtVal = true;
+
+            return true;
         }
 
         crtIdx = startIdx;
@@ -774,8 +856,6 @@ public class Parser {
         if (exprPrimary(rv)) {
             while (true) {
                 if (consume(TokenType.LBRACK)) {
-
-                    // Only arrays can be indexed.
                     if (rv.type.nElements < 0) {
                         tkerr("Only an array can be indexed");
                     }
@@ -794,22 +874,20 @@ public class Parser {
                         tkerr("Array index cannot be an array");
                     }
 
-                    // Array indices must be integer values.
-                    if (index.type.typeBase != TypeBase.TB_INT &&
-                        index.type.typeBase != TypeBase.TB_CHAR) {
-                        tkerr("Array index must be int or char");
+                    Type intType = new Type(TypeBase.TB_INT);
+
+                    if (!canConvert(index.type, intType)) {
+                        tkerr("Array index must be convertible to int");
                     }
 
                     if (!consume(TokenType.RBRACK)) {
                         tkerr("Missing ] after array index");
                     }
 
-                    // v[i] has the element type, not the array type.
                     Type oldType = rv.type;
                     rv.type = new Type(oldType.typeBase);
                     rv.type.structSymbol = oldType.structSymbol;
 
-                    // Indexed elements can appear on the left side of =.
                     rv.isLVal = true;
                     rv.isCtVal = false;
 
@@ -817,8 +895,6 @@ public class Parser {
                 }
 
                 if (consume(TokenType.DOT)) {
-
-                    // Only structs support member access.
                     if (rv.type.typeBase != TypeBase.TB_STRUCT) {
                         tkerr("Left side of . is not a struct");
                     }
@@ -829,8 +905,8 @@ public class Parser {
                         tkerr("Missing field name after .");
                     }
 
-                    // Find the requested field in the struct definition.
                     Symbol field = null;
+
                     for (Symbol member : rv.type.structSymbol.structMembers) {
                         if (member.name.equals(fieldTk.getValue())) {
                             field = member;
@@ -861,29 +937,33 @@ public class Parser {
     // exprPrimary: ID call? | constants | LPAREN expr RPAREN
     private boolean exprPrimary(RetVal rv) {
         int startIdx = crtIdx;
-        int argCount = 0;
-        int argIndex = 0;
-        RetVal arg = new RetVal();
 
         if (consume(TokenType.IDENTIFIER)) {
             Token tk = tokens.get(crtIdx - 1);
 
-            // Every identifier must have a declaration.
             Symbol s = symbolTable.findSymbol(tk.getValue());
+
             if (s == null) {
                 tkerr("Undefined symbol: " + tk.getValue());
             }
+
+            boolean wasCall = false;
 
             rv.type = s.type;
             rv.isLVal = s.kind == SymbolKind.SK_VAR || s.kind == SymbolKind.SK_PARAM;
             rv.isCtVal = false;
 
             if (consume(TokenType.LPAREN)) {
+                wasCall = true;
+
                 if (s.kind != SymbolKind.SK_FN) {
                     tkerr("Symbol is not a function: " + tk.getValue());
                 }
 
-                // Verify function call arguments.
+                int argCount = 0;
+                int argIndex = 0;
+                RetVal arg = new RetVal();
+
                 if (expr(arg)) {
                     if (argIndex >= s.fnParams.size()) {
                         tkerr("Too many arguments in call to " + tk.getValue());
@@ -923,6 +1003,14 @@ public class Parser {
                 if (argCount != s.fnParams.size()) {
                     tkerr("Invalid number of arguments in call to " + tk.getValue());
                 }
+
+                rv.type = s.type;
+                rv.isLVal = false;
+                rv.isCtVal = true;
+            }
+
+            if (s.kind == SymbolKind.SK_FN && !wasCall) {
+                tkerr("A function can only be called");
             }
 
             return true;
@@ -988,7 +1076,6 @@ public class Parser {
     // =====================
 
     private Type getArithType(Type a, Type b) {
-        // Determine the result type of an arithmetic operation.
         if (a == null || b == null) {
             tkerr("Invalid arithmetic expression");
         }
@@ -1009,32 +1096,88 @@ public class Parser {
     }
 
     private boolean canConvert(Type src, Type dst) {
-        // Checks if a value of src type can be assigned to dst type.
-        if (src.nElements >= 0 || dst.nElements >= 0) {
-            return src.nElements == dst.nElements &&
-                   src.typeBase == dst.typeBase;
+        if (src == null || dst == null) {
+            return false;
         }
 
+        // Array conversions
+        if (src.nElements >= 0 || dst.nElements >= 0) {
+            // Both must be arrays.
+            if (src.nElements < 0 || dst.nElements < 0) {
+                return false;
+            }
+
+            // Base type must match.
+            if (src.typeBase != dst.typeBase) {
+                return false;
+            }
+
+            // For struct arrays, the struct definition must also match.
+            if (src.typeBase == TypeBase.TB_STRUCT &&
+                src.structSymbol != dst.structSymbol) {
+                return false;
+            }
+
+            // Destination int v[] accepts any sized int array.
+            if (dst.nElements == 0) {
+                return true;
+            }
+
+            // Otherwise exact size must match.
+            return src.nElements == dst.nElements;
+        }
+
+        // Same scalar type.
         if (src.typeBase == dst.typeBase) {
+            if (src.typeBase == TypeBase.TB_STRUCT) {
+                return src.structSymbol == dst.structSymbol;
+            }
+
             return true;
         }
 
+        // Numeric scalar conversions.
         if ((src.typeBase == TypeBase.TB_INT ||
-             src.typeBase == TypeBase.TB_CHAR) &&
+            src.typeBase == TypeBase.TB_CHAR) &&
             (dst.typeBase == TypeBase.TB_INT ||
-             dst.typeBase == TypeBase.TB_CHAR ||
-             dst.typeBase == TypeBase.TB_DOUBLE)) {
+            dst.typeBase == TypeBase.TB_CHAR ||
+            dst.typeBase == TypeBase.TB_DOUBLE)) {
             return true;
         }
 
         if (src.typeBase == TypeBase.TB_DOUBLE &&
             (dst.typeBase == TypeBase.TB_DOUBLE ||
-             dst.typeBase == TypeBase.TB_INT ||
-             dst.typeBase == TypeBase.TB_CHAR)) {
+            dst.typeBase == TypeBase.TB_INT ||
+            dst.typeBase == TypeBase.TB_CHAR)) {
             return true;
         }
 
         return false;
+    }
+
+    private boolean canBeScalar(RetVal r) {
+        return r != null &&
+               r.type != null &&
+               r.type.nElements < 0 &&
+               r.type.typeBase != TypeBase.TB_STRUCT &&
+               r.type.typeBase != TypeBase.TB_VOID;
+    }
+
+    private boolean isCastStart() {
+        if (crtTk().getTokenType() != TokenType.LPAREN) {
+            return false;
+        }
+
+        if (crtIdx + 1 >= tokens.size()) {
+            return false;
+        }
+
+        TokenType next = tokens.get(crtIdx + 1).getTokenType();
+
+        return next == TokenType.INT ||
+            next == TokenType.DOUBLE ||
+            next == TokenType.CHAR ||
+            next == TokenType.STRUCT;
     }
 
     // =====================

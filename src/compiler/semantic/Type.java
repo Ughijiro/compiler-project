@@ -2,24 +2,31 @@ package compiler.semantic;
 
 public class Type {
 
+    public static final int ARRAY_EXPR_SIZE = -2;
+
     public TypeBase typeBase;   // Basic type: INT, DOUBLE, CHAR, STRUCT, VOID
     public Symbol structSymbol; // Only used if typeBase is TB_STRUCT
-    public int nElements;       // -1 for non-array, 0 for int v[], >0 for int v[10]
+    public int nElements;       // -1 for non-array, 0 for int v[], >0 for int v[10], -2 for int v[expr]
 
     public Type(TypeBase typeBase) {
         this.typeBase = typeBase;
         this.nElements = -1; // Default for not an array
     }
 
-    @Override
+    
     public String toString() {
         String base = typeBase.toString();
+
         if (typeBase == TypeBase.TB_STRUCT && structSymbol != null) {
             base += " (" + structSymbol.name + ")";
         }
-        if (nElements >= 0) {
+
+        if (nElements == ARRAY_EXPR_SIZE) {
+            base += "[expr]";
+        } else if (nElements >= 0) {
             base += "[" + (nElements > 0 ? nElements : "") + "]";
         }
+
         return base;
     }
 }
