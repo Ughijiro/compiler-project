@@ -573,10 +573,6 @@ public class Parser {
     private boolean exprAssign(RetVal rv) {
         int startIdx = crtIdx;
 
-        // Important:
-        // If the expression starts with a cast, like (int)v,
-        // do not try to parse it as an assignment destination.
-        // Let exprOr -> ... -> exprCast handle it.
         if (!isCastStart()) {
             RetVal left = new RetVal();
 
